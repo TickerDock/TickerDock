@@ -1,0 +1,21 @@
+{
+  "name": "stock-fund-workspace",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "pnpm@11.6.0",
+  "scripts": {
+    "clean": "pnpm -r clean",
+    "build": "pnpm --filter @stock-fund/domain build && pnpm --filter @stock-fund/data-sources build && pnpm --filter stock-fund build",
+    "typecheck": "tsc -b --pretty false",
+    "test": "pnpm -r test",
+    "check": "pnpm typecheck && pnpm test && pnpm build",
+    "test:integration": "pnpm --filter stock-fund test:integration",
+    "package:vsix": "pnpm --filter stock-fund package:vsix",
+    "release:check": "pnpm check && pnpm test:integration && pnpm package:vsix"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "typescript": "^5.8.3",
+    "vitest": "^3.2.4"
+  }
+}

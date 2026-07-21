@@ -1,0 +1,8 @@
+node_modules/
+dist/
+coverage/
+.vscode-test/
+packages/extension/dist-integration/
+*.vsix
+*.tsbuildinfo
+pnpm-debug.log*

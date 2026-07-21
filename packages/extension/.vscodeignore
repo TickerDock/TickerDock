@@ -1,0 +1,13 @@
+src/**
+integration/**
+dist-integration/**
+node_modules/**
+tsconfig*.json
+*.tsbuildinfo
+dist/*.d.ts
+dist/*.d.ts.map
+dist/*.js.map
+dist/*.test.js
+dist/*.js
+!dist/extension.js
+!dist/webviewCharts.js

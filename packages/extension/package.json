@@ -1,0 +1,1094 @@
+{
+  "name": "stock-fund",
+  "displayName": "Stock Fund",
+  "description": "Stock and fund quotes powered by stock-api and fund-api",
+  "version": "0.1.0",
+  "publisher": "stock-fund-beta",
+  "private": true,
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished",
+    "onView:stockFundView.stock",
+    "onView:stockFundView.fund",
+    "onView:stockFundView.binance",
+    "onView:stockFundView.forex",
+    "onView:stockFundView.news",
+    "onView:stockFundView.sector",
+    "onView:stockFundView.settings"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "stockFundMenu",
+          "title": "Stock Fund",
+          "icon": "resources/leekfund.svg"
+        }
+      ]
+    },
+    "views": {
+      "stockFundMenu": [
+        {
+          "id": "stockFundView.stock",
+          "name": "Stock"
+        },
+        {
+          "id": "stockFundView.fund",
+          "name": "Fund"
+        },
+        {
+          "id": "stockFundView.binance",
+          "name": "Binance"
+        },
+        {
+          "id": "stockFundView.forex",
+          "name": "Forex"
+        },
+        {
+          "id": "stockFundView.news",
+          "name": "Flash News"
+        },
+        {
+          "id": "stockFundView.sector",
+          "name": "板块"
+        },
+        {
+          "id": "stockFundView.settings",
+          "name": "Settings"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "stock-fund.refreshStock",
+        "title": "刷新股票",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "stock-fund.refreshFund",
+        "title": "刷新基金",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "stock-fund.sortStock",
+        "title": "升序/降序/不排序",
+        "icon": {
+          "light": "resources/light/sort.svg",
+          "dark": "resources/dark/sort.svg"
+        }
+      },
+      {
+        "command": "stock-fund.sortFund",
+        "title": "升序/降序/不排序",
+        "icon": {
+          "light": "resources/light/sort.svg",
+          "dark": "resources/dark/sort.svg"
+        }
+      },
+      {
+        "command": "stock-fund.sortFundAmount",
+        "title": "按持仓市值排序基金",
+        "icon": "$(symbol-number)"
+      },
+      {
+        "command": "stock-fund.manageStockPositions",
+        "title": "管理股票持仓",
+        "icon": {
+          "light": "resources/light/amount.svg",
+          "dark": "resources/dark/amount.svg"
+        }
+      },
+      {
+        "command": "stock-fund.manageFundPositions",
+        "title": "管理基金持仓",
+        "icon": {
+          "light": "resources/light/amount.svg",
+          "dark": "resources/dark/amount.svg"
+        }
+      },
+      {
+        "command": "stock-fund.viewStockDetails",
+        "title": "查看股票详情",
+        "icon": "$(info)"
+      },
+      {
+        "command": "stock-fund.viewStockHistory",
+        "title": "查看股票走势",
+        "icon": "$(graph)"
+      },
+      {
+        "command": "stock-fund.toggleStockChartMode",
+        "title": "切换标准/筹码图模式",
+        "icon": "$(graph-scatter)"
+      },
+      {
+        "command": "stock-fund.toggleHeldStockHighlight",
+        "title": "切换持仓股票高亮",
+        "icon": "$(highlight)"
+      },
+      {
+        "command": "stock-fund.toggleReminders",
+        "title": "切换股票提醒",
+        "icon": "$(bell)"
+      },
+      {
+        "command": "stock-fund.viewStockResearch",
+        "title": "查看股票研报",
+        "icon": "$(book)"
+      },
+      {
+        "command": "stock-fund.viewFundDetails",
+        "title": "查看基金详情",
+        "icon": "$(info)"
+      },
+      {
+        "command": "stock-fund.viewFundHistory",
+        "title": "查看基金走势",
+        "icon": "$(graph)"
+      },
+      {
+        "command": "stock-fund.viewFundHoldings",
+        "title": "查看基金持仓",
+        "icon": "$(pie-chart)"
+      },
+      {
+        "command": "stock-fund.viewFundRanking",
+        "title": "基金排行",
+        "icon": "$(graph)"
+      },
+      {
+        "command": "stock-fund.viewFundFlows",
+        "title": "市场资金流向",
+        "icon": "$(pulse)"
+      },
+      {
+        "command": "stock-fund.viewFundComparison",
+        "title": "对比基金表现",
+        "icon": "$(group-by-ref-type)"
+      },
+      {
+        "command": "stock-fund.viewFundOverview",
+        "title": "基金行情总览",
+        "icon": "$(graph-line)"
+      },
+      {
+        "command": "stock-fund.refreshBinance",
+        "title": "刷新币安",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "stock-fund.addBinancePair",
+        "title": "添加币安交易对",
+        "icon": "$(add)"
+      },
+      {
+        "command": "stock-fund.sortBinance",
+        "title": "排序交易对",
+        "icon": "$(list-ordered)"
+      },
+      {
+        "command": "stock-fund.deleteBinancePair",
+        "title": "移除交易对"
+      },
+      {
+        "command": "stock-fund.binanceTop",
+        "title": "交易对置顶"
+      },
+      {
+        "command": "stock-fund.binanceUp",
+        "title": "交易对上移",
+        "icon": "$(arrow-up)"
+      },
+      {
+        "command": "stock-fund.binanceDown",
+        "title": "交易对下移",
+        "icon": "$(arrow-down)"
+      },
+      {
+        "command": "stock-fund.viewBinanceHistory",
+        "title": "查看详情",
+        "icon": "$(graph)"
+      },
+      {
+        "command": "stock-fund.refreshForex",
+        "title": "刷新外汇",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "stock-fund.refreshNews",
+        "title": "刷新快讯",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "stock-fund.showNewsOutput",
+        "title": "显示快讯输出",
+        "icon": "$(output)"
+      },
+      {
+        "command": "stock-fund.toggleNewsOutput",
+        "title": "切换快讯输出",
+        "icon": "$(radio-tower)"
+      },
+      {
+        "command": "stock-fund.openFlashNews",
+        "title": "打开快讯"
+      },
+      {
+        "command": "stock-fund.openLeekCenter",
+        "title": "打开韭菜中心",
+        "icon": "$(home)"
+      },
+      {
+        "command": "stock-fund.openStockConnectFlow",
+        "title": "沪深港通资金流向",
+        "icon": "$(arrow-swap)"
+      },
+      {
+        "command": "stock-fund.openMainCapitalFlow",
+        "title": "主力资金流向",
+        "icon": "$(pulse)"
+      },
+      {
+        "command": "stock-fund.viewMarketSentiment",
+        "title": "牛熊风向标",
+        "icon": "$(dashboard)"
+      },
+      {
+        "command": "stock-fund.manageSectors",
+        "title": "管理板块",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "stock-fund.openSector",
+        "title": "打开板块详情"
+      },
+      {
+        "command": "stock-fund.configureAi",
+        "title": "配置AI",
+        "icon": "$(settings-gear)"
+      },
+      {
+        "command": "stock-fund.openSettings",
+        "title": "打开扩展设置",
+        "icon": "$(settings-gear)"
+      },
+      {
+        "command": "stock-fund.openPersonalization",
+        "title": "打开个性化设置",
+        "icon": "$(settings-gear)"
+      },
+      {
+        "command": "stock-fund.configureAiHistoryRange",
+        "title": "配置AI股票历史范围",
+        "icon": "$(history)"
+      },
+      {
+        "command": "stock-fund.deleteAiKey",
+        "title": "删除AI密钥"
+      },
+      {
+        "command": "stock-fund.askAi",
+        "title": "询问AI",
+        "icon": "$(sparkle)"
+      },
+      {
+        "command": "stock-fund.showAiOutput",
+        "title": "显示AI研究输出",
+        "icon": "$(output)"
+      },
+      {
+        "command": "stock-fund.clearAiOutput",
+        "title": "清空AI研究输出",
+        "icon": "$(clear-all)"
+      },
+      {
+        "command": "stock-fund.toggleMarketHours",
+        "title": "切换交易时段调度",
+        "icon": "$(clock)"
+      },
+      {
+        "command": "stock-fund.analyzeStock",
+        "title": "AI 分析股票",
+        "icon": "$(sparkle)"
+      },
+      {
+        "command": "stock-fund.exportSettings",
+        "title": "导出设置",
+        "icon": "$(export)"
+      },
+      {
+        "command": "stock-fund.importSettings",
+        "title": "导入设置",
+        "icon": "$(cloud-download)"
+      },
+      {
+        "command": "stock-fund.viewStockHistoryByCode",
+        "title": "查看状态栏股票K线"
+      },
+      {
+        "command": "stock-fund.togglePortfolioStatusBar",
+        "title": "切换收益状态栏"
+      },
+      {
+        "command": "stock-fund.toggleAllStatusBars",
+        "title": "切换全部状态栏"
+      },
+      {
+        "command": "stock-fund.toggleStockPortfolioStatusBar",
+        "title": "切换股票收益状态栏"
+      },
+      {
+        "command": "stock-fund.toggleFundPortfolioStatusBar",
+        "title": "切换基金收益状态栏"
+      },
+      {
+        "command": "stock-fund.toggleMarketStatusBar",
+        "title": "切换行情状态栏"
+      },
+      {
+        "command": "stock-fund.toggleStatusBarIcons",
+        "title": "切换状态栏图标"
+      },
+      {
+        "command": "stock-fund.configureStatusBarStocks",
+        "title": "配置状态栏股票",
+        "icon": "$(layout-statusbar)"
+      },
+      {
+        "command": "stock-fund.addStockToStatusBar",
+        "title": "添加到状态栏"
+      },
+      {
+        "command": "stock-fund.removeStockFromStatusBar",
+        "title": "从状态栏移除"
+      },
+      {
+        "command": "stock-fund.addStockGroup",
+        "title": "添加股票分组",
+        "icon": "$(new-folder)"
+      },
+      {
+        "command": "stock-fund.renameStockGroup",
+        "title": "重命名股票分组"
+      },
+      {
+        "command": "stock-fund.removeStockGroup",
+        "title": "删除股票分组"
+      },
+      {
+        "command": "stock-fund.addStock",
+        "title": "添加股票",
+        "icon": "$(add)"
+      },
+      {
+        "command": "stock-fund.deleteStock",
+        "title": "删除股票"
+      },
+      {
+        "command": "stock-fund.stockTop",
+        "title": "置顶股票",
+        "icon": {
+          "light": "resources/light/top.svg",
+          "dark": "resources/dark/top.svg"
+        }
+      },
+      {
+        "command": "stock-fund.stockUp",
+        "title": "股票上移",
+        "icon": "$(arrow-up)"
+      },
+      {
+        "command": "stock-fund.stockDown",
+        "title": "股票下移",
+        "icon": "$(arrow-down)"
+      },
+      {
+        "command": "stock-fund.setStockPosition",
+        "title": "设置股票持仓",
+        "icon": {
+          "light": "resources/light/amount.svg",
+          "dark": "resources/dark/amount.svg"
+        }
+      },
+      {
+        "command": "stock-fund.addStockReminder",
+        "title": "添加股票提醒",
+        "icon": "$(bell)"
+      },
+      {
+        "command": "stock-fund.removeStockReminders",
+        "title": "移除股票提醒"
+      },
+      {
+        "command": "stock-fund.addFundGroup",
+        "title": "添加基金分组",
+        "icon": "$(new-folder)"
+      },
+      {
+        "command": "stock-fund.renameFundGroup",
+        "title": "重命名基金分组"
+      },
+      {
+        "command": "stock-fund.removeFundGroup",
+        "title": "删除基金分组"
+      },
+      {
+        "command": "stock-fund.addFund",
+        "title": "添加基金",
+        "icon": "$(add)"
+      },
+      {
+        "command": "stock-fund.deleteFund",
+        "title": "删除基金"
+      },
+      {
+        "command": "stock-fund.fundTop",
+        "title": "置顶基金",
+        "icon": {
+          "light": "resources/light/top.svg",
+          "dark": "resources/dark/top.svg"
+        }
+      },
+      {
+        "command": "stock-fund.fundUp",
+        "title": "基金上移",
+        "icon": "$(arrow-up)"
+      },
+      {
+        "command": "stock-fund.fundDown",
+        "title": "基金下移",
+        "icon": "$(arrow-down)"
+      },
+      {
+        "command": "stock-fund.setFundPosition",
+        "title": "设置基金持仓",
+        "icon": {
+          "light": "resources/light/amount.svg",
+          "dark": "resources/dark/amount.svg"
+        }
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "stock-fund.refreshStock",
+          "when": "view == stockFundView.stock",
+          "group": "navigation"
+        },
+        {
+          "command": "stock-fund.openLeekCenter",
+          "when": "view == stockFundView.stock",
+          "group": "navigation"
+        },
+        {
+          "command": "stock-fund.viewMarketSentiment",
+          "when": "view == stockFundView.stock",
+          "group": "navigation"
+        },
+        {
+          "command": "stock-fund.addStockGroup",
+          "when": "view == stockFundView.stock",
+          "group": "navigation"
+        },
+        {
+          "command": "stock-fund.sortStock",
+          "when": "view == stockFundView.stock",
+          "group": "navigation"
+        },
+        {
+          "command": "stock-fund.manageStockPositions",
+          "when": "view == stockFundView.stock",
+          "group": "navigation"
+        },
+        {
+          "command": "stock-fund.refreshFund",
+          "when": "view == stockFundView.fund",
+          "group": "navigation"
+        },
+        {
+          "command": "stock-fund.addFundGroup",
+          "when": "view == stockFundView.fund",
+          "group": "navigation"
+        },
+        {
+          "command": "stock-fund.sortFund",
+          "when": "view == stockFundView.fund",
+          "group": "navigation"
+        },
+        {
+          "command": "stock-fund.viewFundRanking",
+          "when": "view == stockFundView.fund",
+          "group": "navigation"
+        },
+        {
+          "command": "stock-fund.viewFundComparison",
+          "when": "view == stockFundView.fund",
+          "group": "navigation"
+        },
+        {
+          "command": "stock-fund.viewFundOverview",
+          "when": "view == stockFundView.fund",
+          "group": "navigation"
+        },
+        {
+          "command": "stock-fund.manageFundPositions",
+          "when": "view == stockFundView.fund",
+          "group": "navigation"
+        },
+        {
+          "command": "stock-fund.refreshBinance",
+          "when": "view == stockFundView.binance",
+          "group": "navigation"
+        },
+        {
+          "command": "stock-fund.addBinancePair",
+          "when": "view == stockFundView.binance",
+          "group": "navigation"
+        },
+        {
+          "command": "stock-fund.sortBinance",
+          "when": "view == stockFundView.binance",
+          "group": "navigation"
+        },
+        {
+          "command": "stock-fund.refreshForex",
+          "when": "view == stockFundView.forex",
+          "group": "navigation"
+        },
+        {
+          "command": "stock-fund.refreshNews",
+          "when": "view == stockFundView.news",
+          "group": "navigation"
+        },
+        {
+          "command": "stock-fund.showNewsOutput",
+          "when": "view == stockFundView.news",
+          "group": "navigation"
+        },
+        {
+          "command": "stock-fund.manageSectors",
+          "when": "view == stockFundView.sector",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "stock-fund.addStock",
+          "when": "view == stockFundView.stock && viewItem == stockGroup",
+          "group": "inline"
+        },
+        {
+          "command": "stock-fund.renameStockGroup",
+          "when": "view == stockFundView.stock && viewItem == stockGroup",
+          "group": "2_modify"
+        },
+        {
+          "command": "stock-fund.removeStockGroup",
+          "when": "view == stockFundView.stock && viewItem == stockGroup",
+          "group": "3_remove"
+        },
+        {
+          "command": "stock-fund.stockTop",
+          "when": "view == stockFundView.stock && (viewItem == stockQuote || viewItem == stockPositionQuote)",
+          "group": "inline"
+        },
+        {
+          "command": "stock-fund.viewStockDetails",
+          "when": "view == stockFundView.stock && (viewItem == stockQuote || viewItem == stockPositionQuote)",
+          "group": "1_history"
+        },
+        {
+          "command": "stock-fund.viewStockHistory",
+          "when": "view == stockFundView.stock && (viewItem == stockQuote || viewItem == stockPositionQuote)",
+          "group": "1_history"
+        },
+        {
+          "command": "stock-fund.analyzeStock",
+          "when": "view == stockFundView.stock && (viewItem == stockQuote || viewItem == stockPositionQuote)",
+          "group": "1_history"
+        },
+        {
+          "command": "stock-fund.viewStockResearch",
+          "when": "view == stockFundView.stock && (viewItem == stockQuote || viewItem == stockPositionQuote)",
+          "group": "1_history"
+        },
+        {
+          "command": "stock-fund.addStockReminder",
+          "when": "view == stockFundView.stock && (viewItem == stockQuote || viewItem == stockPositionQuote)",
+          "group": "1_reminder"
+        },
+        {
+          "command": "stock-fund.removeStockReminders",
+          "when": "view == stockFundView.stock && (viewItem == stockQuote || viewItem == stockPositionQuote)",
+          "group": "1_reminder"
+        },
+        {
+          "command": "stock-fund.addStockToStatusBar",
+          "when": "view == stockFundView.stock && (viewItem == stockQuote || viewItem == stockPositionQuote)",
+          "group": "1_statusbar"
+        },
+        {
+          "command": "stock-fund.removeStockFromStatusBar",
+          "when": "view == stockFundView.stock && (viewItem == stockQuote || viewItem == stockPositionQuote)",
+          "group": "1_statusbar"
+        },
+        {
+          "command": "stock-fund.deleteStock",
+          "when": "view == stockFundView.stock && (viewItem == stockQuote || viewItem == stockPositionQuote)",
+          "group": "2_modify"
+        },
+        {
+          "command": "stock-fund.stockUp",
+          "when": "view == stockFundView.stock && (viewItem == stockQuote || viewItem == stockPositionQuote)",
+          "group": "inline"
+        },
+        {
+          "command": "stock-fund.stockDown",
+          "when": "view == stockFundView.stock && (viewItem == stockQuote || viewItem == stockPositionQuote)",
+          "group": "inline"
+        },
+        {
+          "command": "stock-fund.addFund",
+          "when": "view == stockFundView.fund && viewItem == fundGroup",
+          "group": "inline"
+        },
+        {
+          "command": "stock-fund.renameFundGroup",
+          "when": "view == stockFundView.fund && viewItem == fundGroup",
+          "group": "2_modify"
+        },
+        {
+          "command": "stock-fund.removeFundGroup",
+          "when": "view == stockFundView.fund && viewItem == fundGroup",
+          "group": "3_remove"
+        },
+        {
+          "command": "stock-fund.fundTop",
+          "when": "view == stockFundView.fund && (viewItem == fundQuote || viewItem == fundPositionQuote)",
+          "group": "inline"
+        },
+        {
+          "command": "stock-fund.viewFundDetails",
+          "when": "view == stockFundView.fund && (viewItem == fundQuote || viewItem == fundPositionQuote)",
+          "group": "1_history"
+        },
+        {
+          "command": "stock-fund.viewFundHistory",
+          "when": "view == stockFundView.fund && (viewItem == fundQuote || viewItem == fundPositionQuote)",
+          "group": "1_history"
+        },
+        {
+          "command": "stock-fund.viewFundHoldings",
+          "when": "view == stockFundView.fund && (viewItem == fundQuote || viewItem == fundPositionQuote)",
+          "group": "1_history"
+        },
+        {
+          "command": "stock-fund.deleteFund",
+          "when": "view == stockFundView.fund && (viewItem == fundQuote || viewItem == fundPositionQuote)",
+          "group": "3_remove"
+        },
+        {
+          "command": "stock-fund.fundUp",
+          "when": "view == stockFundView.fund && (viewItem == fundQuote || viewItem == fundPositionQuote)",
+          "group": "inline"
+        },
+        {
+          "command": "stock-fund.fundDown",
+          "when": "view == stockFundView.fund && (viewItem == fundQuote || viewItem == fundPositionQuote)",
+          "group": "inline"
+        },
+        {
+          "command": "stock-fund.deleteBinancePair",
+          "when": "view == stockFundView.binance && viewItem == cryptoQuote",
+          "group": "2_remove"
+        },
+        {
+          "command": "stock-fund.binanceTop",
+          "when": "view == stockFundView.binance && viewItem == cryptoQuote",
+          "group": "1_modify"
+        },
+        {
+          "command": "stock-fund.binanceUp",
+          "when": "view == stockFundView.binance && viewItem == cryptoQuote",
+          "group": "inline"
+        },
+        {
+          "command": "stock-fund.binanceDown",
+          "when": "view == stockFundView.binance && viewItem == cryptoQuote",
+          "group": "inline"
+        },
+        {
+          "command": "stock-fund.openFlashNews",
+          "when": "view == stockFundView.news && viewItem == flashNews",
+          "group": "inline"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "股票基金",
+      "properties": {
+        "stock-fund.stocks": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "sh000001",
+            "sh000300",
+            "hk00700",
+            "usr_ixic"
+          ]
+        },
+        "stock-fund.stockGroups": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "自定义股票分组名称；首次编辑分组时会迁移旧版自选股列表"
+        },
+        "stock-fund.stockLists": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "default": [],
+          "description": "按自定义分组组织的股票代码"
+        },
+        "stock-fund.funds": {
+          "type": "array",
+          "default": [
+            [
+              "001632",
+              "420009",
+              "320007"
+            ]
+          ]
+        },
+        "stock-fund.fundGroups": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "My Funds"
+          ]
+        },
+        "stock-fund.interval": {
+          "type": "number",
+          "default": 5000,
+          "minimum": 3000
+        },
+        "stock-fund.marketHoursEnabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "仅在对应市场交易时段自动刷新；首次和手动刷新始终执行"
+        },
+        "stock-fund.stockChartMode": {
+          "type": "string",
+          "enum": [
+            "standard",
+            "chips"
+          ],
+          "default": "standard",
+          "description": "默认股票图表模式；沪深个股支持筹码分布"
+        },
+        "stock-fund.heldStockHighlightEnabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "在股票视图中高亮持仓股票并显示持仓标记"
+        },
+        "stock-fund.sidebarDisplayMode": {
+          "type": "string",
+          "enum": [
+            "standard",
+            "template"
+          ],
+          "default": "standard",
+          "description": "使用标准行情布局或自定义侧栏模板"
+        },
+        "stock-fund.stockLabelTemplate": {
+          "type": "string",
+          "default": "${icon|padRight|3}${percent|padRight|9}${price|padRight|12}${name}",
+          "maxLength": 240,
+          "description": "模板显示模式下使用的股票标签模板"
+        },
+        "stock-fund.fundLabelTemplate": {
+          "type": "string",
+          "default": "${icon|padRight|3}${percent|padRight|9}${nav|padRight|12}${name} ${earnings}",
+          "maxLength": 240,
+          "description": "模板显示模式下使用的基金标签模板"
+        },
+        "stock-fund.statusBarLabelTemplate": {
+          "type": "string",
+          "default": "${icon}${name} ${price} ${percent}",
+          "maxLength": 240,
+          "description": "行情状态栏模板"
+        },
+        "stock-fund.stockPortfolioTemplate": {
+          "type": "string",
+          "default": "${icon}${name} ${currency} ${totalProfit} | 今日 ${todayProfit}${warning}",
+          "maxLength": 240,
+          "description": "股票收益状态栏模板"
+        },
+        "stock-fund.fundPortfolioTemplate": {
+          "type": "string",
+          "default": "${icon}${name} ${currency} ${totalProfit} | 今日 ${todayProfit}${warning}",
+          "maxLength": 240,
+          "description": "基金收益状态栏模板"
+        },
+        "stock-fund.changeIconStyle": {
+          "type": "string",
+          "enum": [
+            "arrow",
+            "arrow1",
+            "food1",
+            "food2",
+            "food3",
+            "iconfood",
+            "none"
+          ],
+          "default": "arrow",
+          "description": "行情标签使用的涨跌图标样式"
+        },
+        "stock-fund.useCustomStatusBarColors": {
+          "type": "boolean",
+          "default": false,
+          "description": "对状态栏项目应用自定义涨跌颜色"
+        },
+        "stock-fund.riseColor": {
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}$",
+          "default": "#e05252",
+          "description": "行情上涨和持仓盈利时的状态栏颜色"
+        },
+        "stock-fund.fallColor": {
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}$",
+          "default": "#3fa66b",
+          "description": "行情下跌和持仓亏损时的状态栏颜色"
+        },
+        "stock-fund.stockSortMode": {
+          "type": "string",
+          "enum": [
+            "original",
+            "ascending",
+            "descending"
+          ],
+          "default": "original",
+          "description": "股票涨跌排序方式"
+        },
+        "stock-fund.fundSortMode": {
+          "type": "string",
+          "enum": [
+            "original",
+            "ascending",
+            "descending",
+            "amount-ascending",
+            "amount-descending"
+          ],
+          "default": "original",
+          "description": "基金涨跌或持仓市值排序方式"
+        },
+        "stock-fund.stockPrice": {
+          "type": "object",
+          "default": {},
+          "description": "由扩展管理的股票持仓数据"
+        },
+        "stock-fund.fundAmount": {
+          "type": "object",
+          "default": {},
+          "description": "由扩展管理的基金持仓数据"
+        },
+        "stock-fund.showPortfolio": {
+          "type": "boolean",
+          "default": true,
+          "description": "股票和基金收益状态栏的总开关兼容项"
+        },
+        "stock-fund.showStockPortfolioStatusBar": {
+          "type": "boolean",
+          "default": true,
+          "description": "在状态栏显示股票持仓收益摘要"
+        },
+        "stock-fund.showFundPortfolioStatusBar": {
+          "type": "boolean",
+          "default": true,
+          "description": "在状态栏显示基金持仓收益摘要"
+        },
+        "stock-fund.statusBarStocks": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 8,
+          "uniqueItems": true,
+          "default": [
+            "sh000001"
+          ],
+          "description": "在状态栏显示行情的自选股票"
+        },
+        "stock-fund.showMarketStatusBar": {
+          "type": "boolean",
+          "default": true,
+          "description": "在状态栏显示所选行情"
+        },
+        "stock-fund.showStatusBarIcons": {
+          "type": "boolean",
+          "default": true,
+          "description": "在行情状态栏中显示涨跌图标"
+        },
+        "stock-fund.stocksRemind": {
+          "type": "object",
+          "default": {},
+          "description": "股票价格和涨跌幅提醒规则"
+        },
+        "stock-fund.remindersEnabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "启用股票阈值提醒"
+        },
+        "stock-fund.binance": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "BTC_USDT",
+            "ETH_USDT"
+          ]
+        },
+        "stock-fund.binanceSortMode": {
+          "type": "string",
+          "enum": [
+            "original",
+            "ascending",
+            "descending"
+          ],
+          "default": "original",
+          "description": "币安24小时涨跌排序方式"
+        },
+        "stock-fund.binanceInterval": {
+          "type": "number",
+          "default": 10000,
+          "minimum": 5000
+        },
+        "stock-fund.forexInterval": {
+          "type": "number",
+          "default": 3600000,
+          "minimum": 300000
+        },
+        "stock-fund.newsInterval": {
+          "type": "number",
+          "default": 15000,
+          "minimum": 10000
+        },
+        "stock-fund.newsSources": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "jin10",
+              "xuangubao"
+            ]
+          },
+          "uniqueItems": true,
+          "default": [
+            "jin10",
+            "xuangubao"
+          ],
+          "description": "合并快讯流包含的数据源"
+        },
+        "stock-fund.importantNewsOnly": {
+          "type": "boolean",
+          "default": false,
+          "description": "合并快讯流中仅显示重要消息"
+        },
+        "stock-fund.flashNewsOutputEnabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "将新快讯写入输出频道并显示未读状态"
+        },
+        "stock-fund.flashNewsNotificationsEnabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "每次刷新有重要快讯时最多显示一条通知"
+        },
+        "stock-fund.sectors": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["code", "name"],
+            "properties": {
+              "code": { "type": "string", "pattern": "^BK[0-9]{4}$" },
+              "name": { "type": "string", "minLength": 1 }
+            }
+          },
+          "default": [],
+          "description": "板块代码和名称，例如 BK0815 昨日涨停"
+        },
+        "stock-fund.aiBaseUrl": {
+          "type": "string",
+          "default": "https://api.openai.com/v1",
+          "description": "AI API基础地址；API密钥单独存储在安全存储中"
+        },
+        "stock-fund.aiModel": {
+          "type": "string",
+          "default": "gpt-5.6",
+          "description": "研报和股票分析使用的AI模型"
+        },
+        "stock-fund.aiApiMode": {
+          "type": "string",
+          "enum": [
+            "responses",
+            "chat-completions"
+          ],
+          "default": "responses",
+          "description": "OpenAI使用Responses API，兼容网关可使用Chat Completions"
+        },
+        "stock-fund.aiStockHistoryRange": {
+          "type": "string",
+          "enum": [
+            "1w",
+            "1m",
+            "3m",
+            "6m",
+            "1y"
+          ],
+          "default": "6m",
+          "description": "AI股票分析包含的日K线历史范围"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "clean": "node -e \"for(const path of ['dist','dist-integration'])require('fs').rmSync(path,{recursive:true,force:true})\"",
+    "build": "esbuild src/extension.ts --bundle --platform=node --target=node18 --format=cjs --external:vscode --outfile=dist/extension.js && esbuild src/webviewCharts.ts --bundle --platform=browser --target=chrome120 --format=iife --minify --outfile=dist/webviewCharts.js",
+    "typecheck": "tsc -b tsconfig.json --pretty false",
+    "test": "vitest run src",
+    "test:integration:compile": "tsc -p tsconfig.integration.json --pretty false",
+    "test:integration": "pnpm --workspace-root build && pnpm test:integration:compile && node dist-integration/runTest.js",
+    "package:vsix": "pnpm --workspace-root build && vsce package --no-dependencies --allow-missing-repository -o ../../stock-fund.vsix"
+  },
+  "dependencies": {
+    "@stock-fund/data-sources": "workspace:*",
+    "@stock-fund/domain": "workspace:*",
+    "echarts": "^6.1.0"
+  },
+  "devDependencies": {
+    "@types/mocha": "10.0.10",
+    "@types/vscode": "^1.85.0",
+    "@vscode/test-electron": "2.5.2",
+    "@vscode/vsce": "2.32.0",
+    "esbuild": "^0.25.5",
+    "mocha": "10.8.2"
+  }
+}
