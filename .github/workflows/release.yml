@@ -1,0 +1,47 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.6.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Verify tag matches extension version
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: node -e "const version=require('./packages/extension/package.json').version; const tag=process.env.RELEASE_TAG.replace(/^v/,''); if(tag!==version){throw new Error('Tag '+tag+' does not match extension version '+version)}"
+      - run: pnpm check
+      - name: Run VS Code integration tests
+        run: xvfb-run -a pnpm test:integration
+      - run: pnpm package:vsix
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tickerdock-${{ github.ref_name }}
+          path: tickerdock.vsix
+          if-no-files-found: error
+      - name: Publish to VS Code Marketplace
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+        run: |
+          test -n "$VSCE_PAT"
+          pnpm --filter tickerdock exec vsce publish --pre-release --packagePath "$GITHUB_WORKSPACE/tickerdock.vsix" --pat "$VSCE_PAT"
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "${{ github.ref_name }}" tickerdock.vsix --verify-tag --generate-notes --prerelease --title "TickerDock ${{ github.ref_name }}"

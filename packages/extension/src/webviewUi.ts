@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { Uri, Webview } from 'vscode';
-import { readWebviewEnvelope, WEBVIEW_PROTOCOL_VERSION } from './webviewProtocol';
+import { WEBVIEW_PROTOCOL_VERSION } from './webviewProtocol';
 export { readWebviewEnvelope, WEBVIEW_PROTOCOL_VERSION } from './webviewProtocol';
 
 export type WebviewBootstrap =
@@ -8,9 +8,10 @@ export type WebviewBootstrap =
   | { page: 'stockPositions'; items: Array<{ code: string; name: string }>; positions: unknown[] }
   | { page: 'fundPositions'; items: Array<{ code: string; name: string }>; positions: unknown[] }
   | { page: 'personalization'; state: unknown; defaults: unknown }
+  | { page: 'aiSettings'; state: unknown }
   | { page: 'stockResearch'; name: string; items?: unknown[] }
   | { page: 'fundDetail'; title: string; detail?: unknown; error?: string }
-  | { page: 'fundHoldings'; code: string; items?: unknown[]; error?: string }
+  | { page: 'fundHoldings'; code: string; name: string; items?: unknown[]; error?: string }
   | { page: 'fundRanking'; items?: unknown[]; error?: string }
   | { page: 'fundFlows'; industry?: unknown[]; concept?: unknown[]; region?: unknown[]; error?: string }
   | { page: 'stockExtendedDetail'; title: string; detail?: unknown; error?: string }

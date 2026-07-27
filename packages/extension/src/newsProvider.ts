@@ -1,5 +1,5 @@
 import { Event, EventEmitter, ThemeIcon, TreeDataProvider, TreeItem, TreeItemCollapsibleState } from 'vscode';
-import { FlashNewsItem } from '@stock-fund/domain';
+import { FlashNewsItem } from '@tickerdock/domain';
 
 export class FlashNewsTreeItem extends TreeItem {
   constructor(public readonly news: FlashNewsItem) {
@@ -12,7 +12,7 @@ export class FlashNewsTreeItem extends TreeItem {
     if (news.url) {
       this.command = {
         title: 'Open news detail',
-        command: 'stock-fund.openFlashNews',
+        command: 'tickerdock.openFlashNews',
         arguments: [this],
       };
     }

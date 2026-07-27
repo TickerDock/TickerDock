@@ -1,4 +1,4 @@
-import { FlashNewsItem } from '@stock-fund/domain';
+import { FlashNewsItem } from '@tickerdock/domain';
 
 export function flashNewsKey(item: FlashNewsItem): string {
   return `${item.source}:${item.id}`;

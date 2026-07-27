@@ -49,6 +49,17 @@ describe('news output service', () => {
     service.process(news);
     expect(mocks.appendLine).toHaveBeenCalledOnce();
   });
+
+  it('keeps an explicitly opened output channel live when background output is disabled', () => {
+    const service = new NewsOutputService();
+    service.process(news);
+    service.show();
+    service.process([...news, {
+      ...news[0]!, id: '2', time: '2026-07-20T08:01:00Z', title: 'Second update',
+    }]);
+    expect(mocks.appendLine).toHaveBeenCalledTimes(2);
+    expect(mocks.appendLine.mock.calls[1]![0]).toContain('Second update');
+  });
 });
 
 

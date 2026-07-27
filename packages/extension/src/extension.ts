@@ -12,8 +12,8 @@ import {
   IwenCaiStockInsightsGateway,
   JiuyangongsheResearchGateway,
   XuanGuBaoFlashNewsGateway,
-} from '@stock-fund/data-sources';
-import { createCnyFxRates, FlashNewsGateway, fromStockApiCode, FundPosition, mergeFundEstimates, StockGateway, StockPosition, StockQuote, StockReminderRule, StockResearchGateway, StockIwenCaiGateway } from '@stock-fund/domain';
+} from '@tickerdock/data-sources';
+import { createCnyFxRates, FlashNewsGateway, fromStockApiCode, FundPosition, mergeFundEstimates, StockGateway, StockPosition, StockQuote, StockReminderRule, StockResearchGateway, StockIwenCaiGateway } from '@tickerdock/domain';
 import { ConfigRepository, FundWatchGroup, StockWatchGroup } from './configRepository';
 import { PortfolioStatusBar } from './portfolioStatusBar';
 import {
@@ -61,9 +61,10 @@ import { pickSearchResult } from './searchQuickPick';
 const DEFAULT_STOCKS = ['SH000001', 'SH000300', 'HK00700', 'USIXIC'];
 const DEFAULT_FUNDS = [['001632', '420009', '320007']];
 
-export function activate(context: ExtensionContext): void {
+export async function activate(context: ExtensionContext): Promise<void> {
   context.subscriptions.push({ dispose: stopEastMoneyProxy });
   const config = new ConfigRepository();
+  await config.migrateBetaNamespace();
   const secrets = new SecretRepository(context.secrets);
   const stockGateway = new CompositeStockGateway();
   const fundGateway = new FundApiGateway();
@@ -96,14 +97,14 @@ export function activate(context: ExtensionContext): void {
   const newsOutput = new NewsOutputService();
   const aiOutput = new AiOutputService();
   const stockQuoteCache = new Map<string, StockQuote>();
-  const stockTree = window.createTreeView('stockFundView.stock', { treeDataProvider: stockProvider });
+  const stockTree = window.createTreeView('tickerdock.stock', { treeDataProvider: stockProvider });
   if (!context.globalState.get<boolean>('portfolioVisibilitySemanticsV2', false)) {
     void config.repairLegacyFundPortfolioVisibility()
       .then(async () => {
         await context.globalState.update('portfolioVisibilitySemanticsV2', true);
         updateStatusBarOptions(config, portfolioBar, marketStatusBar);
       })
-      .catch((error) => console.error('[stock-fund] Portfolio visibility migration failed', error));
+      .catch((error) => console.error('[tickerdock] Portfolio visibility migration failed', error));
   }
   const createNewsGateway = (): FlashNewsGateway => {
     const sources = config.getNewsSources();
@@ -126,12 +127,12 @@ export function activate(context: ExtensionContext): void {
     newsOutput,
     aiOutput,
     stockTree,
-    window.createTreeView('stockFundView.fund', { treeDataProvider: fundProvider }),
-    window.createTreeView('stockFundView.binance', { treeDataProvider: cryptoProvider }),
-    window.createTreeView('stockFundView.forex', { treeDataProvider: forexProvider }),
-    window.createTreeView('stockFundView.news', { treeDataProvider: flashNewsProvider }),
-    window.createTreeView('stockFundView.sector', { treeDataProvider: sectorProvider }),
-    window.createTreeView('stockFundView.settings', { treeDataProvider: settingsProvider })
+    window.createTreeView('tickerdock.fund', { treeDataProvider: fundProvider }),
+    window.createTreeView('tickerdock.binance', { treeDataProvider: cryptoProvider }),
+    window.createTreeView('tickerdock.forex', { treeDataProvider: forexProvider }),
+    window.createTreeView('tickerdock.news', { treeDataProvider: flashNewsProvider }),
+    window.createTreeView('tickerdock.sector', { treeDataProvider: sectorProvider }),
+    window.createTreeView('tickerdock.settings', { treeDataProvider: settingsProvider })
   );
 
   const refreshStocks = async (reason: RefreshReason) => {
@@ -171,7 +172,7 @@ export function activate(context: ExtensionContext): void {
       void updateLeekCenterWatchlist(getLeekCenterWatchlist());
       await reminderService.process(quotes);
     } catch (error) {
-      console.error('[stock-fund] Stock refresh failed', error);
+      console.error('[tickerdock] Stock refresh failed', error);
     }
   };
 
@@ -193,7 +194,7 @@ export function activate(context: ExtensionContext): void {
       portfolioBar.updateFunds(profits);
       void updateLeekCenterWatchlist(getLeekCenterWatchlist());
     } catch (error) {
-      console.error('[stock-fund] Fund refresh failed', error);
+      console.error('[tickerdock] Fund refresh failed', error);
     }
   };
 
@@ -203,7 +204,7 @@ export function activate(context: ExtensionContext): void {
     try {
       cryptoProvider.setQuotes(await binanceGateway.getQuotes(config.getBinancePairs()));
     } catch (error) {
-      console.error('[stock-fund] Binance refresh failed', error);
+      console.error('[tickerdock] Binance refresh failed', error);
     }
   });
   const forexRefresh = new RefreshController(config.getForexInterval(), async () => {
@@ -212,7 +213,7 @@ export function activate(context: ExtensionContext): void {
       forexProvider.setQuotes(quotes);
       portfolioBar.setFxRates(createCnyFxRates(quotes));
     } catch (error) {
-      console.error('[stock-fund] Forex refresh failed', error);
+      console.error('[tickerdock] Forex refresh failed', error);
     }
   });
   const newsRefresh = new RefreshController(config.getNewsInterval(), async () => {
@@ -221,7 +222,7 @@ export function activate(context: ExtensionContext): void {
       flashNewsProvider.setNews(news, config.getImportantNewsOnly());
       newsOutput.process(news);
     } catch (error) {
-      console.error('[stock-fund] Flash news refresh failed', error);
+      console.error('[tickerdock] Flash news refresh failed', error);
     }
   });
   context.subscriptions.push(stockRefresh, fundRefresh, cryptoRefresh, forexRefresh, newsRefresh);
@@ -234,7 +235,7 @@ export function activate(context: ExtensionContext): void {
   registerMarketCommands(context, config, binanceGateway, cryptoProvider, cryptoRefresh, forexRefresh);
   registerSettingsCommands(context);
   registerStatusBarCommands(context, config, portfolioBar, marketStatusBar);
-  registerLegacyCommandAliases(context);
+  await registerLegacyCommandAliases(context);
   newsOutput.setEnabled(config.getFlashNewsOutputEnabled());
   newsOutput.setNotificationsEnabled(config.getFlashNewsNotificationsEnabled());
   const getLeekCenterWatchlist = () => ({
@@ -255,67 +256,70 @@ export function activate(context: ExtensionContext): void {
     loadStockDetails: (code, name, token) => loadStockExtendedDetail(stockGateway, stockResearchGateway, iwencaiGateway, code, name, token),
   });
   context.subscriptions.push(
-    commands.registerCommand('stock-fund.openLeekCenter', () => openLeekCenter()),
-    commands.registerCommand('stock-fund.manageSectors', () =>
+    commands.registerCommand('tickerdock.openLeekCenter', () => openLeekCenter()),
+    commands.registerCommand('tickerdock.manageSectors', () =>
       showSectorManager(context.extensionUri, config, (sectors) => sectorProvider.setSectors(sectors))
     ),
-    commands.registerCommand('stock-fund.openSector', (item: SectorTreeItem) =>
+    commands.registerCommand('tickerdock.openSector', (item: SectorTreeItem) =>
       showSectorHistory(context.extensionUri, item.sector.code, item.sector.name)
     ),
-    commands.registerCommand('stock-fund.openStockConnectFlow', () => openLeekCenter('northbound-flow')),
-    commands.registerCommand('stock-fund.openMainCapitalFlow', () => openLeekCenter('main-capital-flow')),
-    commands.registerCommand('stock-fund.viewMarketSentiment', () => showMarketSentiment(marketSentimentGateway, context.extensionUri)),
-    commands.registerCommand('stock-fund.refreshNews', () => newsRefresh.refreshNow()),
-    commands.registerCommand('stock-fund.showNewsOutput', () => newsOutput.show()),
-    commands.registerCommand('stock-fund.toggleNewsOutput', async () => {
+    commands.registerCommand('tickerdock.openStockConnectFlow', () => openLeekCenter('northbound-flow')),
+    commands.registerCommand('tickerdock.openMainCapitalFlow', () => openLeekCenter('main-capital-flow')),
+    commands.registerCommand('tickerdock.viewMarketSentiment', () => showMarketSentiment(marketSentimentGateway, context.extensionUri)),
+    commands.registerCommand('tickerdock.refreshNews', () => newsRefresh.refreshNow()),
+    commands.registerCommand('tickerdock.showNewsOutput', async () => {
+      newsOutput.show();
+      await newsRefresh.refreshNow();
+    }),
+    commands.registerCommand('tickerdock.toggleNewsOutput', async () => {
       const enabled = !config.getFlashNewsOutputEnabled();
       await config.setFlashNewsOutputEnabled(enabled);
       newsOutput.setEnabled(enabled);
       void window.showInformationMessage(`Flash news output ${enabled ? 'enabled' : 'disabled'}.`);
     }),
-    commands.registerCommand('stock-fund.openFlashNews', (item: FlashNewsTreeItem) => {
+    commands.registerCommand('tickerdock.openFlashNews', (item: FlashNewsTreeItem) => {
       if (item.news.url) return env.openExternal(Uri.parse(item.news.url));
       return undefined;
     }),
-    commands.registerCommand('stock-fund.configureAi', () => configureAi(config, secrets)),
-    commands.registerCommand('stock-fund.openSettings', () =>
-      commands.executeCommand('workbench.action.openSettings', '@ext:stock-fund-beta.stock-fund')
+    commands.registerCommand('tickerdock.configureAi', () => configureAi(context.extensionUri, config, secrets)),
+    commands.registerCommand('tickerdock.openSettings', () =>
+      commands.executeCommand('workbench.action.openSettings', '@ext:tickerdock.tickerdock')
     ),
-    commands.registerCommand('stock-fund.openPersonalization', () =>
+    commands.registerCommand('tickerdock.openPersonalization', () =>
       showPersonalization(context.extensionUri, config, applyPersonalization, watchedStockOptions(config, stockProvider))
     ),
-    commands.registerCommand('stock-fund.configureAiHistoryRange', () => configureAiHistoryRange(config)),
-    commands.registerCommand('stock-fund.deleteAiKey', () => deleteAiKey(secrets)),
-    commands.registerCommand('stock-fund.askAi', () => askAi(context.extensionUri, config, secrets, aiOutput)),
-    commands.registerCommand('stock-fund.showAiOutput', () => aiOutput.show()),
-    commands.registerCommand('stock-fund.clearAiOutput', () => {
+    commands.registerCommand('tickerdock.configureAiHistoryRange', () => configureAiHistoryRange(config)),
+    commands.registerCommand('tickerdock.deleteAiKey', () => deleteAiKey(secrets)),
+    commands.registerCommand('tickerdock.askAi', () => askAi(context.extensionUri, config, secrets, aiOutput)),
+    commands.registerCommand('tickerdock.showAiOutput', () => aiOutput.show()),
+    commands.registerCommand('tickerdock.clearAiOutput', () => {
       aiOutput.clear();
       void window.showInformationMessage('AI research output cleared.');
     }),
-    commands.registerCommand('stock-fund.toggleMarketHours', async () => {
+    commands.registerCommand('tickerdock.toggleMarketHours', async () => {
       const enabled = !config.getMarketHoursEnabled();
       await config.setMarketHoursEnabled(enabled);
       void window.showInformationMessage(`Market-hours scheduling ${enabled ? 'enabled' : 'disabled'}.`);
     }),
-    commands.registerCommand('stock-fund.toggleStockChartMode', async (on?: number | boolean) => {
+    commands.registerCommand('tickerdock.toggleStockChartMode', async (on?: number | boolean) => {
       const mode = on === undefined
         ? config.getStockChartMode() === 'chips' ? 'standard' : 'chips'
         : on ? 'chips' : 'standard';
       await config.setStockChartMode(mode);
       void window.showInformationMessage(`Default stock chart mode: ${mode}.`);
     }),
-    commands.registerCommand('stock-fund.toggleHeldStockHighlight', async () => {
+    commands.registerCommand('tickerdock.toggleHeldStockHighlight', async () => {
       const enabled = !config.getHeldStockHighlightEnabled();
       await config.setHeldStockHighlightEnabled(enabled);
       stockProvider.setHeldHighlightEnabled(enabled);
       void window.showInformationMessage(`Held-stock highlighting ${enabled ? 'enabled' : 'disabled'}.`);
     }),
-    commands.registerCommand('stock-fund.toggleReminders', async (on?: number | boolean) => {
+    commands.registerCommand('tickerdock.toggleReminders', async (on?: number | boolean) => {
       const enabled = on === undefined ? !config.getRemindersEnabled() : Boolean(on);
       await config.setRemindersEnabled(enabled);
       void window.showInformationMessage(`Stock reminders ${enabled ? 'enabled' : 'disabled'}.`);
     }),
-    commands.registerCommand('stock-fund.viewStockResearch', (item: StockQuoteTreeItem) => {
+    commands.registerCommand('tickerdock.viewStockResearch', (item: StockQuoteTreeItem) => {
       const query = researchKeywordForStockCode(item.code);
       if (!query) {
         void window.showInformationMessage('Jiuyangongshe research is available for A-share stocks.');
@@ -324,15 +328,15 @@ export function activate(context: ExtensionContext): void {
       return showStockResearch(
         stockResearchGateway,
         query,
-        typeof item.label === 'string' ? item.label : item.label?.label ?? item.code,
+        item.name,
         context.extensionUri
       );
     }),
-    commands.registerCommand('stock-fund.analyzeStock', (item: StockQuoteTreeItem) =>
+    commands.registerCommand('tickerdock.analyzeStock', (item: StockQuoteTreeItem) =>
       analyzeStock(
         context.extensionUri,
         item.code,
-        typeof item.label === 'string' ? item.label : item.label?.label ?? item.code,
+        item.name,
         stockGateway,
         createNewsGateway(),
         stockResearchGateway,
@@ -342,12 +346,12 @@ export function activate(context: ExtensionContext): void {
       ))
   );
   context.subscriptions.push(workspace.onDidChangeConfiguration((event) => {
-    if (event.affectsConfiguration('stock-fund.interval') || event.affectsConfiguration('leek-fund.interval')) {
+    if (event.affectsConfiguration('tickerdock.interval') || event.affectsConfiguration('leek-fund.interval')) {
       const interval = config.getInterval();
       stockRefresh.updateInterval(interval);
       fundRefresh.updateInterval(interval);
     }
-    if (event.affectsConfiguration('stock-fund') || event.affectsConfiguration('leek-fund')) {
+    if (event.affectsConfiguration('tickerdock') || event.affectsConfiguration('leek-fund')) {
       stockProvider.setSortMode(config.getStockSortMode());
       stockProvider.setHeldHighlightEnabled(config.getHeldStockHighlightEnabled());
       stockProvider.setPersonalization(config.getPersonalization());
@@ -358,28 +362,28 @@ export function activate(context: ExtensionContext): void {
       if (affectsAnyConfiguration(event, ['stocks', 'stockGroups', 'stockLists', 'stockPrice'])) void stockRefresh.refreshNow();
       if (affectsAnyConfiguration(event, ['funds', 'fundGroups', 'fundAmount'])) void fundRefresh.refreshNow();
     }
-    if (event.affectsConfiguration('stock-fund.binanceInterval')) {
+    if (event.affectsConfiguration('tickerdock.binanceInterval')) {
       cryptoRefresh.updateInterval(config.getBinanceInterval());
     }
-    if (event.affectsConfiguration('stock-fund.forexInterval')) {
+    if (event.affectsConfiguration('tickerdock.forexInterval')) {
       forexRefresh.updateInterval(config.getForexInterval());
     }
-    if (event.affectsConfiguration('stock-fund.newsInterval')) {
+    if (event.affectsConfiguration('tickerdock.newsInterval')) {
       newsRefresh.updateInterval(config.getNewsInterval());
     }
-    if (event.affectsConfiguration('stock-fund.importantNewsOnly')) {
+    if (event.affectsConfiguration('tickerdock.importantNewsOnly')) {
       void newsRefresh.refreshNow();
     }
-    if (event.affectsConfiguration('stock-fund.newsSources')) {
+    if (event.affectsConfiguration('tickerdock.newsSources')) {
       void newsRefresh.refreshNow();
     }
-    if (event.affectsConfiguration('stock-fund.flashNewsOutputEnabled')) {
+    if (event.affectsConfiguration('tickerdock.flashNewsOutputEnabled')) {
       newsOutput.setEnabled(config.getFlashNewsOutputEnabled());
     }
-    if (event.affectsConfiguration('stock-fund.flashNewsNotificationsEnabled')) {
+    if (event.affectsConfiguration('tickerdock.flashNewsNotificationsEnabled')) {
       newsOutput.setNotificationsEnabled(config.getFlashNewsNotificationsEnabled());
     }
-    if (event.affectsConfiguration('stock-fund.sectors')) sectorProvider.setSectors(config.getSectors());
+    if (event.affectsConfiguration('tickerdock.sectors')) sectorProvider.setSectors(config.getSectors());
   }));
 
   stockRefresh.start();
@@ -395,7 +399,7 @@ function affectsAnyConfiguration(
   keys: readonly string[]
 ): boolean {
   return keys.some((key) =>
-    event.affectsConfiguration(`stock-fund.${key}`) || event.affectsConfiguration(`leek-fund.${key}`)
+    event.affectsConfiguration(`tickerdock.${key}`) || event.affectsConfiguration(`leek-fund.${key}`)
   );
 }
 
@@ -407,15 +411,15 @@ function registerStatusBarCommands(
 ): void {
   const update = () => updateStatusBarOptions(config, portfolioBar, marketStatusBar);
   context.subscriptions.push(
-    commands.registerCommand('stock-fund.viewStockHistoryByCode', (code: string, name?: string) => showStockHistory(
+    commands.registerCommand('tickerdock.viewStockHistoryByCode', (code: string, name?: string) => showStockHistory(
       context.extensionUri, code, name || code, config.getStockChartMode(), (mode) => config.setStockChartMode(mode)
     )),
-    commands.registerCommand('stock-fund.togglePortfolioStatusBar', async () => {
+    commands.registerCommand('tickerdock.togglePortfolioStatusBar', async () => {
       const visible = config.getShowStockPortfolioStatusBar() || config.getShowFundPortfolioStatusBar();
       await config.setShowPortfolio(!visible);
       update();
     }),
-    commands.registerCommand('stock-fund.toggleAllStatusBars', async () => {
+    commands.registerCommand('tickerdock.toggleAllStatusBars', async () => {
       const visible = config.getShowStockPortfolioStatusBar()
         || config.getShowFundPortfolioStatusBar()
         || config.getShowMarketStatusBar();
@@ -425,23 +429,23 @@ function registerStatusBarCommands(
       ]);
       update();
     }),
-    commands.registerCommand('stock-fund.toggleStockPortfolioStatusBar', async () => {
+    commands.registerCommand('tickerdock.toggleStockPortfolioStatusBar', async () => {
       await config.setShowStockPortfolioStatusBar(!config.getShowStockPortfolioStatusBar());
       update();
     }),
-    commands.registerCommand('stock-fund.toggleFundPortfolioStatusBar', async () => {
+    commands.registerCommand('tickerdock.toggleFundPortfolioStatusBar', async () => {
       await config.setShowFundPortfolioStatusBar(!config.getShowFundPortfolioStatusBar());
       update();
     }),
-    commands.registerCommand('stock-fund.toggleMarketStatusBar', async () => {
+    commands.registerCommand('tickerdock.toggleMarketStatusBar', async () => {
       await config.setShowMarketStatusBar(!config.getShowMarketStatusBar());
       update();
     }),
-    commands.registerCommand('stock-fund.toggleStatusBarIcons', async () => {
+    commands.registerCommand('tickerdock.toggleStatusBarIcons', async () => {
       await config.setShowStatusBarIcons(!config.getShowStatusBarIcons());
       update();
     }),
-    commands.registerCommand('stock-fund.addStockToStatusBar', async (item: StockQuoteTreeItem) => {
+    commands.registerCommand('tickerdock.addStockToStatusBar', async (item: StockQuoteTreeItem) => {
       const watched = config.getStocks(DEFAULT_STOCKS);
       const selected = config.getStatusBarStocks(['SH000001']);
       if (selected.includes(item.code)) {
@@ -455,11 +459,11 @@ function registerStatusBarCommands(
       await config.setStatusBarStocks(normalizeStatusBarCodes([...selected, item.code], watched));
       update();
     }),
-    commands.registerCommand('stock-fund.removeStockFromStatusBar', async (item: StockQuoteTreeItem) => {
+    commands.registerCommand('tickerdock.removeStockFromStatusBar', async (item: StockQuoteTreeItem) => {
       await config.setStatusBarStocks(config.getStatusBarStocks(['SH000001']).filter((code) => code !== item.code));
       update();
     }),
-    commands.registerCommand('stock-fund.configureStatusBarStocks', async () => {
+    commands.registerCommand('tickerdock.configureStatusBarStocks', async () => {
       const watched = config.getStocks(DEFAULT_STOCKS);
       const current = new Set(config.getStatusBarStocks(['SH000001']));
       const selected = await window.showQuickPick(watched.map((code) => ({
@@ -516,16 +520,16 @@ function registerMarketCommands(
   forexRefresh: RefreshController
 ): void {
   context.subscriptions.push(
-    commands.registerCommand('stock-fund.refreshBinance', () => cryptoRefresh.refreshNow()),
-    commands.registerCommand('stock-fund.refreshForex', () => forexRefresh.refreshNow()),
-    commands.registerCommand('stock-fund.viewBinanceHistory', (item: CryptoTreeItem) =>
+    commands.registerCommand('tickerdock.refreshBinance', () => cryptoRefresh.refreshNow()),
+    commands.registerCommand('tickerdock.refreshForex', () => forexRefresh.refreshNow()),
+    commands.registerCommand('tickerdock.viewBinanceHistory', (item: CryptoTreeItem) =>
       showBinanceIframe(context.extensionUri, item.symbol, treeItemLabel(item))),
-    commands.registerCommand('stock-fund.sortBinance', async () => {
+    commands.registerCommand('tickerdock.sortBinance', async () => {
       const mode = cryptoProvider.cycleSort();
       await config.setBinanceSortMode(mode);
       window.setStatusBarMessage(`Binance sort: ${mode}`, 1500);
     }),
-    commands.registerCommand('stock-fund.addBinancePair', async () => {
+    commands.registerCommand('tickerdock.addBinancePair', async () => {
       const selected = await pickSearchResult(
         'Add Binance Pair',
         'Type a trading pair, base asset, or quote asset',
@@ -535,19 +539,19 @@ function registerMarketCommands(
       await config.setBinancePairs([...config.getBinancePairs(), selected.code]);
       await cryptoRefresh.refreshNow();
     }),
-    commands.registerCommand('stock-fund.deleteBinancePair', async (item: CryptoTreeItem) => {
+    commands.registerCommand('tickerdock.deleteBinancePair', async (item: CryptoTreeItem) => {
       await config.setBinancePairs(config.getBinancePairs().filter((symbol) => symbol !== item.symbol));
       await cryptoRefresh.refreshNow();
     }),
-    commands.registerCommand('stock-fund.binanceTop', async (item: CryptoTreeItem) => {
+    commands.registerCommand('tickerdock.binanceTop', async (item: CryptoTreeItem) => {
       await config.setBinancePairs(moveCode(config.getBinancePairs(), item.symbol, 'top'));
       await cryptoRefresh.refreshNow();
     }),
-    commands.registerCommand('stock-fund.binanceUp', async (item: CryptoTreeItem) => {
+    commands.registerCommand('tickerdock.binanceUp', async (item: CryptoTreeItem) => {
       await config.setBinancePairs(moveCode(config.getBinancePairs(), item.symbol, 'up'));
       await cryptoRefresh.refreshNow();
     }),
-    commands.registerCommand('stock-fund.binanceDown', async (item: CryptoTreeItem) => {
+    commands.registerCommand('tickerdock.binanceDown', async (item: CryptoTreeItem) => {
       await config.setBinancePairs(moveCode(config.getBinancePairs(), item.symbol, 'down'));
       await cryptoRefresh.refreshNow();
     })
@@ -570,9 +574,9 @@ function registerCommands(
   fundRefresh: RefreshController
 ): void {
   context.subscriptions.push(
-    commands.registerCommand('stock-fund.refreshStock', () => stockRefresh.refreshNow()),
-    commands.registerCommand('stock-fund.refreshFund', () => fundRefresh.refreshNow()),
-    commands.registerCommand('stock-fund.viewStockHistory', (item: StockQuoteTreeItem) =>
+    commands.registerCommand('tickerdock.refreshStock', () => stockRefresh.refreshNow()),
+    commands.registerCommand('tickerdock.refreshFund', () => fundRefresh.refreshNow()),
+    commands.registerCommand('tickerdock.viewStockHistory', (item: StockQuoteTreeItem) =>
       showStockHistory(
         extensionUri,
         item.code,
@@ -581,18 +585,18 @@ function registerCommands(
         (mode) => config.setStockChartMode(mode),
         stockGateway
       )),
-    commands.registerCommand('stock-fund.viewStockDetails', (item: StockQuoteTreeItem) =>
+    commands.registerCommand('tickerdock.viewStockDetails', (item: StockQuoteTreeItem) =>
       isIndexStock(item.code, item.name)
         ? showStockKline(stockGateway, extensionUri, item.code, item.name)
         : showStockExtendedDetails(stockGateway, stockResearchGateway, iwencaiGateway, extensionUri, item.code, item.name)),
-    commands.registerCommand('stock-fund.viewFundHistory', (item: FundQuoteTreeItem) =>
+    commands.registerCommand('tickerdock.viewFundHistory', (item: FundQuoteTreeItem) =>
       showFundHistory(fundGateway, extensionUri, item.code, item.name)),
-    commands.registerCommand('stock-fund.viewFundDetails', (item: FundQuoteTreeItem) =>
+    commands.registerCommand('tickerdock.viewFundDetails', (item: FundQuoteTreeItem) =>
       showFundDetails(fundInsightsGateway, extensionUri, item.code, item.name)),
-    commands.registerCommand('stock-fund.viewFundHoldings', (item: FundQuoteTreeItem) => showFundHoldings(fundInsightsGateway, extensionUri, item.code)),
-    commands.registerCommand('stock-fund.viewFundRanking', () => showFundRanking(fundInsightsGateway, extensionUri)),
-    commands.registerCommand('stock-fund.viewFundFlows', () => showFundFlows(fundInsightsGateway, extensionUri)),
-    commands.registerCommand('stock-fund.viewFundComparison', async () => {
+    commands.registerCommand('tickerdock.viewFundHoldings', (item: FundQuoteTreeItem) => showFundHoldings(fundInsightsGateway, extensionUri, item.code, item.name)),
+    commands.registerCommand('tickerdock.viewFundRanking', () => showFundRanking(fundInsightsGateway, extensionUri)),
+    commands.registerCommand('tickerdock.viewFundFlows', () => showFundFlows(fundInsightsGateway, extensionUri)),
+    commands.registerCommand('tickerdock.viewFundComparison', async () => {
       const funds = fundProvider.getWatchItems();
       if (funds.length < 2) {
         void window.showWarningMessage('Add at least two funds before opening a comparison.');
@@ -614,24 +618,24 @@ function registerCommands(
       }
       await showFundComparison(fundGateway, extensionUri, selected.map(({ fund }) => fund));
     }),
-    commands.registerCommand('stock-fund.viewFundOverview', () =>
+    commands.registerCommand('tickerdock.viewFundOverview', () =>
       showFundOverview(fundGateway, fundEstimateGateway, extensionUri, fundProvider.getWatchItems())),
-    commands.registerCommand('stock-fund.sortStock', async () => {
+    commands.registerCommand('tickerdock.sortStock', async () => {
       const mode = stockProvider.cycleSort();
       await config.setStockSortMode(mode);
       window.setStatusBarMessage(`Stock sort: ${mode}`, 1500);
     }),
-    commands.registerCommand('stock-fund.sortFund', async () => {
+    commands.registerCommand('tickerdock.sortFund', async () => {
       const mode = fundProvider.cycleSort();
       await config.setFundSortMode(mode);
       window.setStatusBarMessage(`Fund sort: ${mode}`, 1500);
     }),
-    commands.registerCommand('stock-fund.sortFundAmount', async () => {
+    commands.registerCommand('tickerdock.sortFundAmount', async () => {
       const mode = fundProvider.cycleAmountSort();
       await config.setFundSortMode(mode);
       window.setStatusBarMessage(`Fund position sort: ${mode}`, 1500);
     }),
-    commands.registerCommand('stock-fund.manageStockPositions', () => {
+    commands.registerCommand('tickerdock.manageStockPositions', () => {
       const positions = config.getStockPositions();
       const names = new Map(stockProvider.getWatchItems().map((item) => [item.code, item.name]));
       const watched = config.getStocks(DEFAULT_STOCKS).map((code) => ({ code, name: names.get(code) || code }));
@@ -641,7 +645,7 @@ function registerCommands(
         await stockRefresh.refreshNow();
       });
     }),
-    commands.registerCommand('stock-fund.manageFundPositions', () => {
+    commands.registerCommand('tickerdock.manageFundPositions', () => {
       const positions = config.getFundPositions();
       const names = new Map(fundProvider.getWatchItems().map((item) => [item.code, item.name]));
       const codes = [...new Set(config.getFundGroups(DEFAULT_FUNDS).flatMap(({ codes: values }) => values))];
@@ -652,14 +656,14 @@ function registerCommands(
         await fundRefresh.refreshNow();
       });
     }),
-    commands.registerCommand('stock-fund.addStockGroup', async () => {
+    commands.registerCommand('tickerdock.addStockGroup', async () => {
       const name = await window.showInputBox({ prompt: 'Stock group name', ignoreFocusOut: true });
       if (!name?.trim()) return;
       const groups = config.getStockGroups(DEFAULT_STOCKS);
       await config.setStockGroups([...groups, { name: name.trim(), codes: [] }]);
       await stockRefresh.refreshNow();
     }),
-    commands.registerCommand('stock-fund.renameStockGroup', async (item: StockGroupTreeItem) => {
+    commands.registerCommand('tickerdock.renameStockGroup', async (item: StockGroupTreeItem) => {
       const name = await window.showInputBox({ prompt: 'Stock group name', value: item.groupName });
       if (!name?.trim()) return;
       const groups = config.getStockGroups(DEFAULT_STOCKS);
@@ -668,7 +672,7 @@ function registerCommands(
       await config.setStockGroups(groups);
       await stockRefresh.refreshNow();
     }),
-    commands.registerCommand('stock-fund.removeStockGroup', async (item: StockGroupTreeItem) => {
+    commands.registerCommand('tickerdock.removeStockGroup', async (item: StockGroupTreeItem) => {
       const groups = config.getStockGroups(DEFAULT_STOCKS);
       const group = groups[item.groupIndex];
       if (!group) return;
@@ -681,7 +685,7 @@ function registerCommands(
       await config.setStockGroups(groups.filter((_, index) => index !== item.groupIndex));
       await stockRefresh.refreshNow();
     }),
-    commands.registerCommand('stock-fund.addStock', async (item?: StockGroupTreeItem) => {
+    commands.registerCommand('tickerdock.addStock', async (item?: StockGroupTreeItem) => {
       const groups = config.getStockGroups(DEFAULT_STOCKS);
       if (groups.length === 0) groups.push({ name: 'My Stocks', codes: [] });
       const groupIndex = item?.groupIndex ?? 0;
@@ -698,7 +702,7 @@ function registerCommands(
       await config.setStockGroups(groups);
       await stockRefresh.refreshNow();
     }),
-    commands.registerCommand('stock-fund.deleteStock', async (item: StockQuoteTreeItem) => {
+    commands.registerCommand('tickerdock.deleteStock', async (item: StockQuoteTreeItem) => {
       const groups = config.getStockGroups(DEFAULT_STOCKS);
       const group = groups[item.groupIndex];
       if (!group) return;
@@ -706,26 +710,26 @@ function registerCommands(
       await config.setStockGroups(groups);
       await stockRefresh.refreshNow();
     }),
-    commands.registerCommand('stock-fund.stockTop', async (item: StockQuoteTreeItem) => {
+    commands.registerCommand('tickerdock.stockTop', async (item: StockQuoteTreeItem) => {
       await moveStock(config, item, 'top');
       await stockRefresh.refreshNow();
     }),
-    commands.registerCommand('stock-fund.stockUp', async (item: StockQuoteTreeItem) => {
+    commands.registerCommand('tickerdock.stockUp', async (item: StockQuoteTreeItem) => {
       await moveStock(config, item, 'up');
       await stockRefresh.refreshNow();
     }),
-    commands.registerCommand('stock-fund.stockDown', async (item: StockQuoteTreeItem) => {
+    commands.registerCommand('tickerdock.stockDown', async (item: StockQuoteTreeItem) => {
       await moveStock(config, item, 'down');
       await stockRefresh.refreshNow();
     }),
-    commands.registerCommand('stock-fund.setStockPosition', async (item: StockQuoteTreeItem) => {
+    commands.registerCommand('tickerdock.setStockPosition', async (item: StockQuoteTreeItem) => {
       const current = config.getStockPositions().get(item.code);
       const position = await promptStockPosition(item.code, current);
       if (!position) return;
       await config.setStockPosition(position);
       await stockRefresh.refreshNow();
     }),
-    commands.registerCommand('stock-fund.addStockReminder', async (item: StockQuoteTreeItem) => {
+    commands.registerCommand('tickerdock.addStockReminder', async (item: StockQuoteTreeItem) => {
       const selected = await window.showQuickPick<QuickPickItem & {
         ruleKind: StockReminderRule['kind'];
         direction: StockReminderRule['direction'];
@@ -750,18 +754,18 @@ function registerCommands(
       });
       window.showInformationMessage(`Reminder added for ${item.label}`);
     }),
-    commands.registerCommand('stock-fund.removeStockReminders', async (item: StockQuoteTreeItem) => {
+    commands.registerCommand('tickerdock.removeStockReminders', async (item: StockQuoteTreeItem) => {
       await config.removeStockReminders(item.code);
       window.showInformationMessage(`Reminders removed for ${item.label}`);
     }),
-    commands.registerCommand('stock-fund.addFundGroup', async () => {
+    commands.registerCommand('tickerdock.addFundGroup', async () => {
       const name = await window.showInputBox({ prompt: 'Fund group name', ignoreFocusOut: true });
       if (!name) return;
       const groups = config.getFundGroups(DEFAULT_FUNDS);
       await config.setFundGroups([...groups, { name, codes: [] }]);
       await fundRefresh.refreshNow();
     }),
-    commands.registerCommand('stock-fund.renameFundGroup', async (item: FundGroupTreeItem) => {
+    commands.registerCommand('tickerdock.renameFundGroup', async (item: FundGroupTreeItem) => {
       const name = await window.showInputBox({ prompt: 'Fund group name', value: item.groupName });
       if (!name) return;
       const groups = config.getFundGroups(DEFAULT_FUNDS);
@@ -770,7 +774,7 @@ function registerCommands(
       await config.setFundGroups(groups);
       await fundRefresh.refreshNow();
     }),
-    commands.registerCommand('stock-fund.removeFundGroup', async (item: FundGroupTreeItem) => {
+    commands.registerCommand('tickerdock.removeFundGroup', async (item: FundGroupTreeItem) => {
       const groups = config.getFundGroups(DEFAULT_FUNDS);
       const group = groups[item.groupIndex];
       if (!group) return;
@@ -783,7 +787,7 @@ function registerCommands(
       await config.setFundGroups(groups.filter((_, index) => index !== item.groupIndex));
       await fundRefresh.refreshNow();
     }),
-    commands.registerCommand('stock-fund.addFund', async (item?: FundGroupTreeItem) => {
+    commands.registerCommand('tickerdock.addFund', async (item?: FundGroupTreeItem) => {
       const groups = config.getFundGroups(DEFAULT_FUNDS);
       if (groups.length === 0) groups.push({ name: 'My Funds', codes: [] });
       const groupIndex = item?.groupIndex ?? 0;
@@ -800,7 +804,7 @@ function registerCommands(
       await config.setFundGroups(groups);
       await fundRefresh.refreshNow();
     }),
-    commands.registerCommand('stock-fund.deleteFund', async (item: FundQuoteTreeItem) => {
+    commands.registerCommand('tickerdock.deleteFund', async (item: FundQuoteTreeItem) => {
       const groups = config.getFundGroups(DEFAULT_FUNDS);
       const group = groups[item.groupIndex];
       if (!group) return;
@@ -808,19 +812,19 @@ function registerCommands(
       await config.setFundGroups(groups);
       await fundRefresh.refreshNow();
     }),
-    commands.registerCommand('stock-fund.fundTop', async (item: FundQuoteTreeItem) => {
+    commands.registerCommand('tickerdock.fundTop', async (item: FundQuoteTreeItem) => {
       await moveFund(config, item, 'top');
       await fundRefresh.refreshNow();
     }),
-    commands.registerCommand('stock-fund.fundUp', async (item: FundQuoteTreeItem) => {
+    commands.registerCommand('tickerdock.fundUp', async (item: FundQuoteTreeItem) => {
       await moveFund(config, item, 'up');
       await fundRefresh.refreshNow();
     }),
-    commands.registerCommand('stock-fund.fundDown', async (item: FundQuoteTreeItem) => {
+    commands.registerCommand('tickerdock.fundDown', async (item: FundQuoteTreeItem) => {
       await moveFund(config, item, 'down');
       await fundRefresh.refreshNow();
     }),
-    commands.registerCommand('stock-fund.setFundPosition', async (item: FundQuoteTreeItem) => {
+    commands.registerCommand('tickerdock.setFundPosition', async (item: FundQuoteTreeItem) => {
       const current = config.getFundPositions().get(item.code);
       const position = await promptFundPosition(item.code, current);
       if (!position) return;

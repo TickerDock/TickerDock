@@ -39,7 +39,7 @@ import {
   StockResearchGateway,
   StockResearchItem,
   toStockApiCode,
-} from '@stock-fund/domain';
+} from '@tickerdock/domain';
 
 type StockApiClient = typeof stocks.auto;
 type FundApiClient = typeof funds.auto;
@@ -640,7 +640,7 @@ export class EastMoneyFundInsightsGateway implements FundInsightsGateway {
 
   async getRanking(limit = 40): Promise<FundRankItem[]> {
     const params = new URLSearchParams({
-      plat: 'Android', appType: 'ttjj', product: 'EFund', Version: '1', deviceid: 'stock-fund',
+      plat: 'Android', appType: 'ttjj', product: 'EFund', Version: '1', deviceid: 'tickerdock',
       pageIndex: '1', pageSize: String(limit), Sort: 'RZDF', orderType: 'desc', FundType: '0', BUY: 'true',
     });
     const response = await this.request(`https://fundmobapi.eastmoney.com/FundMNewApi/FundMNRank?${params}`, {
@@ -689,12 +689,12 @@ export class EastMoneyFundInsightsGateway implements FundInsightsGateway {
       signal: AbortSignal.timeout(10000),
     });
     if (!response.ok) throw new Error(`EastMoney fund page returned HTTP ${response.status}.`);
-    return parseEastMoneyFundDetailPage(await response.text(), code);
+    return parseEastMoneyFundDetailPage(await decodeResponseText(response), code);
   }
 
   private async getDiagnosis(code: string): Promise<Partial<FundExtendedDetail>> {
     const params = new URLSearchParams({
-      version: '10.0', deviceid: 'stock-fund', product: 'EFund', plat: 'Iphone', FCODE: code,
+      version: '10.0', deviceid: 'tickerdock', product: 'EFund', plat: 'Iphone', FCODE: code,
     });
     const response = await this.request(`https://fundmobapi.eastmoney.com/FundMNewApi/FundMNCSDiag?${params}`, {
       headers: { Referer: 'https://fund.eastmoney.com/' },
@@ -1226,6 +1226,17 @@ function fundRiskLevel(value: unknown): string | undefined {
 
 function normalizedText(value: unknown): string {
   return string(value).replace(/\s+/g, ' ').trim();
+}
+
+async function decodeResponseText(response: Response): Promise<string> {
+  const bytes = await response.arrayBuffer();
+  const charset = /charset\s*=\s*["']?([^;\s"']+)/i.exec(response.headers.get('content-type') ?? '')?.[1]?.toLowerCase();
+  const encoding = charset === 'gbk' || charset === 'gb2312' ? 'gb18030' : charset || 'utf-8';
+  try {
+    return new TextDecoder(encoding, { fatal: true }).decode(bytes);
+  } catch {
+    return new TextDecoder('gb18030').decode(bytes);
+  }
 }
 
 type IwenCaiTable = { columns: string[]; rows: unknown[][] };

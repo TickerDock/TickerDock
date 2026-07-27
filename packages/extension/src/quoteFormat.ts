@@ -1,4 +1,4 @@
-import type { StockQuote } from '@stock-fund/domain';
+import type { StockQuote } from '@tickerdock/domain';
 
 export function formatQuotePrice(value: number): string {
   return Number.isFinite(value)

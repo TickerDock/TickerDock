@@ -1,5 +1,5 @@
 {
-  "name": "@stock-fund/data-sources",
+  "name": "@tickerdock/data-sources",
   "version": "0.1.0",
   "private": true,
   "main": "dist/index.js",
@@ -8,10 +8,11 @@
     "clean": "node -e \"for(const path of ['dist','tsconfig.tsbuildinfo'])require('fs').rmSync(path,{recursive:true,force:true})\"",
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -b tsconfig.json --pretty false",
-    "test": "vitest run"
+    "test": "vitest run",
+    "coverage": "vitest run --coverage"
   },
   "dependencies": {
-    "@stock-fund/domain": "workspace:*",
+    "@tickerdock/domain": "workspace:*",
     "node-html-parser": "7.0.1",
     "fund-api": "1.2.1",
     "stock-api": "2.7.3"

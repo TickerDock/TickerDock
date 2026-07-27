@@ -1,7 +1,8 @@
 import { legacyFundSortMode, legacySortMode } from './sortModel';
 import { DEFAULT_PERSONALIZATION, normalizeLegacyColor, normalizePersonalization } from './personalizationModel';
 
-export const SETTINGS_FORMAT = 'stock-fund-settings';
+export const SETTINGS_FORMAT = 'tickerdock-settings';
+const BETA_SETTINGS_FORMAT = 'stock-fund-settings';
 export const SETTINGS_VERSION = 1;
 
 export const TRANSFERABLE_SETTING_KEYS = [
@@ -78,14 +79,14 @@ export function createSettingsBundle(
 ): SettingsBundle {
   const output: Record<string, unknown> = {};
   for (const key of TRANSFERABLE_SETTING_KEYS) {
-    if (settings[key] !== undefined) output[`stock-fund.${key}`] = settings[key];
+    if (settings[key] !== undefined) output[`tickerdock.${key}`] = settings[key];
   }
   return { format: SETTINGS_FORMAT, version: SETTINGS_VERSION, exportedAt, settings: output };
 }
 
 export function parseSettingsBundle(input: unknown): ParsedSettings {
   if (!isRecord(input)) throw new Error('The settings file must contain a JSON object.');
-  const isBundle = input.format === SETTINGS_FORMAT;
+  const isBundle = input.format === SETTINGS_FORMAT || input.format === BETA_SETTINGS_FORMAT;
   if (isBundle && input.version !== SETTINGS_VERSION) {
     throw new Error(`Unsupported settings version: ${String(input.version)}.`);
   }
@@ -106,7 +107,7 @@ export function parseSettingsBundle(input: unknown): ParsedSettings {
       ignoredKeys.push(fullKey);
       continue;
     }
-    legacy ||= parsedKey.namespace === 'leek-fund';
+    legacy ||= parsedKey.namespace !== 'tickerdock';
     if (SECRET_KEYS.has(parsedKey.key)) {
       ignoredKeys.push(fullKey);
       continue;
@@ -166,14 +167,17 @@ export function parseSettingsBundle(input: unknown): ParsedSettings {
   return { settings, ignoredKeys: [...new Set(ignoredKeys)], legacy };
 }
 
-function splitKey(fullKey: string): { namespace: 'stock-fund' | 'leek-fund'; key: string } | undefined {
+type SettingsNamespace = 'tickerdock' | 'stock-fund' | 'leek-fund';
+
+function splitKey(fullKey: string): { namespace: SettingsNamespace; key: string } | undefined {
+  if (fullKey.startsWith('tickerdock.')) return { namespace: 'tickerdock', key: fullKey.slice(11) };
   if (fullKey.startsWith('stock-fund.')) return { namespace: 'stock-fund', key: fullKey.slice(11) };
   if (fullKey.startsWith('leek-fund.')) return { namespace: 'leek-fund', key: fullKey.slice(10) };
   return undefined;
 }
 
 function mapLegacyKey(
-  namespace: 'stock-fund' | 'leek-fund',
+  namespace: SettingsNamespace,
   key: string,
   value: unknown
 ): { key: string; value: unknown } | undefined {
@@ -229,7 +233,7 @@ function mapLegacyKey(
 }
 
 function legacyExpandedStockGroup(
-  namespace: 'stock-fund' | 'leek-fund',
+  namespace: SettingsNamespace,
   key: string
 ): string | undefined {
   if (namespace !== 'leek-fund') return undefined;

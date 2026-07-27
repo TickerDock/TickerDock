@@ -14,7 +14,7 @@ export function buildBinanceIframeTarget(symbol: string, theme: BinanceWidgetThe
   }).toString();
   target.hash = encodeURIComponent(JSON.stringify({
     symbol: tradingViewSymbol,
-    frameElementId: 'stock-fund-binance-chart',
+    frameElementId: 'tickerdock-binance-chart',
     interval: 'D',
     hide_side_toolbar: '0',
     allow_symbol_change: '1',
@@ -25,7 +25,7 @@ export function buildBinanceIframeTarget(symbol: string, theme: BinanceWidgetThe
     timezone: 'Etc/UTC',
     withdateranges: '1',
     studies_overrides: '{}',
-    utm_source: 'stock-fund',
+    utm_source: 'tickerdock',
     utm_medium: 'widget',
     utm_campaign: 'chart',
     utm_term: tradingViewSymbol,

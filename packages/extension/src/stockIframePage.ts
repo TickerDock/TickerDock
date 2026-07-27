@@ -14,7 +14,7 @@ export function buildStockIframeTargets(
   if (sector) {
     return { standard: `${eastMoneyOrigin}/basic/full.html?mcid=90.${sector[0].toUpperCase()}&type=r` };
   }
-  const future = /^HF([A-Z0-9]+)$/.exec(normalized);
+  const future = /^(?:HF|NF_)([A-Z0-9]+)$/.exec(normalized);
   if (future) {
     return { standard: `https://finance.sina.com.cn/futures/quotes/${future[1]!.toUpperCase()}.shtml` };
   }
@@ -39,7 +39,7 @@ export function buildStockIframeTargets(
     return { standard: `${eastMoneyOrigin}/basic/full.html?mcid=116.${hongKong[1]}` };
   }
 
-  const us = /^US([A-Z0-9.^-]{1,20})$/.exec(normalized);
+  const us = /^(?:US|USR_|GB_)([A-Z0-9.^-]{1,20})$/.exec(normalized);
   if (us) {
     return { standard: `${eastMoneyOrigin}/basic/full.html?mcid=105.${encodeURIComponent(us[1]!.toUpperCase())}` };
   }

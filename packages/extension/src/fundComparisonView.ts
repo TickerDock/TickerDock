@@ -1,5 +1,5 @@
 import { Uri, ViewColumn, window } from 'vscode';
-import { FundGateway } from '@stock-fund/domain';
+import { FundGateway } from '@tickerdock/domain';
 import { filterFundNavRange, FundTrendRange } from './trendModel';
 import { readWebviewEnvelope, renderWebviewUi, webviewUiRoot } from './webviewUi';
 
@@ -13,7 +13,7 @@ export async function showFundComparison(
   extensionUri: Uri,
   funds: readonly { code: string; name: string }[]
 ): Promise<void> {
-  const panel = window.createWebviewPanel('stockFundComparison', 'Fund Performance Comparison', ViewColumn.One, {
+  const panel = window.createWebviewPanel('tickerdockComparison', 'Fund Performance Comparison', ViewColumn.One, {
     enableScripts: true,
     retainContextWhenHidden: false,
     localResourceRoots: [webviewUiRoot(extensionUri)],

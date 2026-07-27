@@ -1,5 +1,5 @@
 import { Uri, ViewColumn, window } from 'vscode';
-import { FundPosition, StockPosition } from '@stock-fund/domain';
+import { FundPosition, StockPosition } from '@tickerdock/domain';
 import {
   parseFundPositionSaveMessage,
   parseStockPositionSaveMessage,
@@ -13,7 +13,7 @@ export function showStockPositionManager(
   positions: ReadonlyMap<string, StockPosition>,
   save: (positions: readonly StockPosition[]) => Promise<void>
 ): void {
-  const panel = window.createWebviewPanel('stockFundStockPositions', '股票持仓', ViewColumn.One, {
+  const panel = window.createWebviewPanel('tickerdockStockPositions', '股票持仓', ViewColumn.One, {
     enableScripts: true,
     retainContextWhenHidden: false,
     localResourceRoots: [webviewUiRoot(extensionUri)],
@@ -42,7 +42,7 @@ export function showFundPositionManager(
   positions: ReadonlyMap<string, FundPosition>,
   save: (positions: readonly FundPosition[]) => Promise<void>
 ): void {
-  const panel = window.createWebviewPanel('stockFundFundPositions', '基金持仓', ViewColumn.One, {
+  const panel = window.createWebviewPanel('tickerdockFundPositions', '基金持仓', ViewColumn.One, {
     enableScripts: true,
     retainContextWhenHidden: false,
     localResourceRoots: [webviewUiRoot(extensionUri)],

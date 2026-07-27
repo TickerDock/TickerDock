@@ -21,7 +21,10 @@ export function PositionManagerPage({ kind, title, items, initial }: {
   }, [items, query]);
   const valid = [...rows.values()].every((value) => kind === 'stock' ? isValidStock(value) : isValidFund(value));
   const update = (code: string, patch: Partial<Position>) => {
-    setRows((current) => new Map(current).set(code, { ...(current.get(code) ?? { code }), ...patch } as Position));
+    setRows((current) => new Map(current).set(code, {
+      ...(current.get(code) ?? (kind === 'stock' ? { code, soldOut: false } : { code })),
+      ...patch,
+    } as Position));
     setDirty(true);
   };
   const clear = (code: string) => {

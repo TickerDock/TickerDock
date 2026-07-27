@@ -1,4 +1,4 @@
-import { FlashNewsItem, Kline, StockResearchItem } from '@stock-fund/domain';
+import { FlashNewsItem, Kline, StockResearchItem } from '@tickerdock/domain';
 
 const MAX_NEWS_ITEMS = 20;
 const MAX_NEWS_TITLE_LENGTH = 500;

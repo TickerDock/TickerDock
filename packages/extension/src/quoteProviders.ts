@@ -7,7 +7,7 @@ import {
   PositionProfit,
   StockPosition,
   StockQuote,
-} from '@stock-fund/domain';
+} from '@tickerdock/domain';
 import { FundWatchGroup, StockWatchGroup } from './configRepository';
 import {
   FundSortMode,
@@ -81,7 +81,7 @@ export class StockQuoteTreeItem extends TreeItem {
     this.iconPath = treeIcon(quote.status, quote.changeRatio, appearance.changeIconStyle, iconRoot, 'graph-line');
     this.command = {
       title: '查看股票走势',
-      command: 'stock-fund.viewStockHistory',
+      command: 'tickerdock.viewStockHistory',
       arguments: [this],
     };
     if (quote.status === 'unavailable') {
@@ -155,7 +155,7 @@ export class FundQuoteTreeItem extends TreeItem {
     this.iconPath = treeIcon(quote.status, changeRatio, appearance.changeIconStyle, iconRoot, 'pulse');
     this.command = {
       title: '查看基金走势',
-      command: 'stock-fund.viewFundHistory',
+      command: 'tickerdock.viewFundHistory',
       arguments: [this],
     };
     if (quote.status === 'unavailable') {

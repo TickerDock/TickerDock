@@ -12,8 +12,8 @@ const MAX_IMPORT_BYTES = 1024 * 1024;
 
 export function registerSettingsCommands(context: ExtensionContext): void {
   context.subscriptions.push(
-    commands.registerCommand('stock-fund.exportSettings', () => exportSettings()),
-    commands.registerCommand('stock-fund.importSettings', () => importSettings(context))
+    commands.registerCommand('tickerdock.exportSettings', () => exportSettings()),
+    commands.registerCommand('tickerdock.importSettings', () => importSettings(context))
   );
 }
 
@@ -22,7 +22,7 @@ async function exportSettings(): Promise<void> {
     const bundle = createSettingsBundle(readCurrentSettings());
     const date = new Date().toISOString().slice(0, 10);
     const uri = await window.showSaveDialog({
-      defaultUri: Uri.file(join(homedir(), `stock-fund-settings-${date}.json`)),
+      defaultUri: Uri.file(join(homedir(), `tickerdock-settings-${date}.json`)),
       filters: { 'JSON files': ['json'] },
       saveLabel: 'Export Settings',
     });
@@ -78,14 +78,14 @@ async function importSettings(context: ExtensionContext): Promise<void> {
 }
 
 function readCurrentSettings(): Partial<Record<TransferableSettingKey, unknown>> {
-  const configuration = workspace.getConfiguration('stock-fund');
+  const configuration = workspace.getConfiguration('tickerdock');
   return Object.fromEntries(TRANSFERABLE_SETTING_KEYS.map((key) => [key, configuration.get(key)]));
 }
 
 async function applySettingsWithRollback(
   imported: Partial<Record<TransferableSettingKey, unknown>>
 ): Promise<void> {
-  const configuration = workspace.getConfiguration('stock-fund');
+  const configuration = workspace.getConfiguration('tickerdock');
   const entries = Object.entries(imported) as Array<[TransferableSettingKey, unknown]>;
   const previous = new Map(entries.map(([key]) => [key, configuration.inspect(key)?.globalValue]));
   const written: TransferableSettingKey[] = [];

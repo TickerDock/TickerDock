@@ -1,7 +1,7 @@
 import { Memento } from 'vscode';
-import { Market, StockQuote } from '@stock-fund/domain';
+import { Market, StockQuote } from '@tickerdock/domain';
 
-const STATE_KEY = 'stock-fund.reminderState';
+const STATE_KEY = 'tickerdock.reminderState';
 const STATE_VERSION = 1;
 const MAX_STATE_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 const MARKETS = new Set<Market>(['sh', 'sz', 'bj', 'hk', 'us', 'cn-future', 'global-future']);

@@ -9,9 +9,10 @@ describe('fund insight pages', () => {
   afterEach(cleanup);
 
   it('renders fund holdings and report date', () => {
-    render(<FundHoldingsPage code="001632" items={[{
+    render(<FundHoldingsPage name="天弘中证食品饮料ETF联接A" items={[{
       code: '600519', name: '贵州茅台', navRatio: 0.099, sharesWan: 1, marketValueWan: 2, reportDate: '2026-03-31',
     }]} />);
+    expect(screen.getByRole('heading', { name: '天弘中证食品饮料ETF联接A 主要持仓' })).toBeInTheDocument();
     expect(screen.getByText('报告日期：2026-03-31')).toBeInTheDocument();
     expect(screen.getByText('+9.90%')).toBeInTheDocument();
   });

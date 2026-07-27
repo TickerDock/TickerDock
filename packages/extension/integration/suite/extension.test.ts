@@ -1,15 +1,15 @@
 import * as assert from 'node:assert/strict';
 import * as vscode from 'vscode';
 
-function stockFundExtension(): vscode.Extension<unknown> {
-  const extension = vscode.extensions.all.find((candidate) => candidate.packageJSON.name === 'stock-fund');
-  assert.ok(extension, 'Stock Fund extension was not loaded by the Extension Host');
+function tickerdockExtension(): vscode.Extension<unknown> {
+  const extension = vscode.extensions.all.find((candidate) => candidate.packageJSON.name === 'tickerdock');
+  assert.ok(extension, 'TickerDock extension was not loaded by the Extension Host');
   return extension;
 }
 
-suite('Stock Fund extension', () => {
+suite('TickerDock extension', () => {
   test('activates and registers every contributed command', async () => {
-    const extension = stockFundExtension();
+    const extension = tickerdockExtension();
     await extension.activate();
     assert.equal(extension.isActive, true);
 
@@ -22,12 +22,12 @@ suite('Stock Fund extension', () => {
   });
 
   test('reloads configuration used by a registered command', async () => {
-    const configuration = vscode.workspace.getConfiguration('stock-fund');
+    const configuration = vscode.workspace.getConfiguration('tickerdock');
     const originalGlobalValue = configuration.inspect<boolean>('marketHoursEnabled')?.globalValue;
 
     try {
       await configuration.update('marketHoursEnabled', false, vscode.ConfigurationTarget.Global);
-      await vscode.commands.executeCommand('stock-fund.toggleMarketHours');
+      await vscode.commands.executeCommand('tickerdock.toggleMarketHours');
       assert.equal(configuration.get<boolean>('marketHoursEnabled'), true);
     } finally {
       await configuration.update('marketHoursEnabled', originalGlobalValue, vscode.ConfigurationTarget.Global);

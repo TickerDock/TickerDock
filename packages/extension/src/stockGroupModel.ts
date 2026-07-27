@@ -1,4 +1,4 @@
-import { Market } from '@stock-fund/domain';
+import { Market } from '@tickerdock/domain';
 
 export const STOCK_GROUPS = [
   { id: 'cn-stock', label: 'A Shares' },

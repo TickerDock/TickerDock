@@ -1,9 +1,9 @@
 import { Uri, ViewColumn, window } from 'vscode';
-import { MarketSentimentGateway } from '@stock-fund/domain';
+import { MarketSentimentGateway } from '@tickerdock/domain';
 import { renderWebviewUi, webviewUiRoot } from './webviewUi';
 
 export async function showMarketSentiment(gateway: MarketSentimentGateway, extensionUri: Uri): Promise<void> {
-  const panel = window.createWebviewPanel('stockFundMarketSentiment', 'Bull/Bear Market Compass', ViewColumn.One, {
+  const panel = window.createWebviewPanel('tickerdockMarketSentiment', 'Bull/Bear Market Compass', ViewColumn.One, {
     enableScripts: true,
     retainContextWhenHidden: false,
     localResourceRoots: [webviewUiRoot(extensionUri)],

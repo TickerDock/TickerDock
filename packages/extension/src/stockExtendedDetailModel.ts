@@ -1,4 +1,4 @@
-import { Kline, StockIwenCaiInsights, StockQuote, StockResearchItem, StockTechnicalLevels } from '@stock-fund/domain';
+import { Kline, StockIwenCaiInsights, StockQuote, StockResearchItem, StockTechnicalLevels } from '@tickerdock/domain';
 
 export function buildStockExtendedDetail(
   quote: StockQuote,

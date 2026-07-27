@@ -1,4 +1,4 @@
-import { SearchResult } from '@stock-fund/domain';
+import { SearchResult } from '@tickerdock/domain';
 import { QuickPickItem, window } from 'vscode';
 
 interface SearchItem extends QuickPickItem {

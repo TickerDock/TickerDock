@@ -1,4 +1,4 @@
-import { StockGateway, StockIwenCaiGateway, StockResearchGateway } from '@stock-fund/domain';
+import { StockGateway, StockIwenCaiGateway, StockResearchGateway } from '@tickerdock/domain';
 import { researchKeywordForStockCode } from './stockAnalysisModel';
 import { buildStockExtendedDetail } from './stockExtendedDetailModel';
 

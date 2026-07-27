@@ -1,5 +1,5 @@
 import { Disposable, OutputChannel, StatusBarAlignment, StatusBarItem, window } from 'vscode';
-import { FlashNewsItem } from '@stock-fund/domain';
+import { FlashNewsItem } from '@tickerdock/domain';
 import { flashNewsKey, unseenFlashNews } from './newsModel';
 
 export class NewsOutputService implements Disposable {
@@ -17,10 +17,10 @@ export class NewsOutputService implements Disposable {
   private unread = 0;
 
   constructor() {
-    this.output = window.createOutputChannel('Stock Fund Flash News');
+    this.output = window.createOutputChannel('TickerDock Flash News');
     this.status = window.createStatusBarItem(StatusBarAlignment.Right, 3);
-    this.status.name = 'Stock Fund flash news';
-    this.status.command = 'stock-fund.showNewsOutput';
+    this.status.name = 'TickerDock flash news';
+    this.status.command = 'tickerdock.showNewsOutput';
     this.renderStatus();
   }
 
@@ -40,7 +40,7 @@ export class NewsOutputService implements Disposable {
     items.forEach((item) => this.initializedSources.add(item.source));
     this.remember(items);
     if (this.opened && !this.hasOutput && this.appendSnapshot()) return;
-    if (!this.enabled || unseen.length === 0) return;
+    if ((!this.enabled && !this.opened) || unseen.length === 0) return;
     for (const item of unseen) {
       this.append(item);
       this.recent.push(`${formatTime(item.time)} ${item.title}`);

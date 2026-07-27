@@ -1,6 +1,6 @@
-# Stock Fund
+# TickerDock
 
-The next-generation implementation of the Leek Fund VS Code extension.
+面向中文用户的 VS Code 行情侧边栏，支持股票、基金、期货、外汇和 Binance 行情及持仓管理。
 
 ## Workspace
 
@@ -18,7 +18,7 @@ every saved row in the extension host, and replace the corresponding position
 configuration atomically before refreshing portfolio results.
 
 Held stocks use VS Code's native label highlighting and an explicit `Holding`
-marker without custom colors. Toggle this with `Stock Fund: Toggle Held-Stock
+marker without custom colors. Toggle this with `TickerDock: Toggle Held-Stock
 Highlight`; the setting falls back to legacy `stockHeldTipShow` values.
 
 The Stock view supports the same custom-group workflow as funds: create,
@@ -61,14 +61,14 @@ Cookie is stored only in VS Code SecretStorage, and timeline HTML is reduced to
 static text before it reaches a Webview.
 
 AI research commands support the OpenAI Responses API and Chat Completions
-compatible gateways. API keys are stored only in SecretStorage. Use `Stock Fund:
-Configure AI`, `Stock Fund: Ask AI`, or the `Analyze Stock with AI` stock context
+compatible gateways. API keys are stored only in SecretStorage. Use `TickerDock:
+Configure AI`, `TickerDock: Ask AI`, or the `Analyze Stock with AI` stock context
 command; stock analysis combines normalized K-lines with a bounded snapshot of
 the currently enabled flash-news sources. AI output is rendered in a
 script-disabled Webview.
 
 AI stock analysis supports persisted `1w`, `1m`, `3m`, `6m`, and `1y` daily
-K-line ranges. Use `Stock Fund: Configure AI Stock History Range`; compatible
+K-line ranges. Use `TickerDock: Configure AI Stock History Range`; compatible
 legacy `aiStockHistoryRange` values are read automatically.
 
 Stock context menus can open a local, script-disabled Jiuyangongshe research
@@ -89,9 +89,9 @@ The original `arrow`, `arrow1`, `food1`, `food2`, `food3`, `iconfood`, and `none
 icon choices retain their original SVG or Emoji mappings, including the 2%
 single/double-arrow threshold.
 
-Successful general and stock AI responses are also appended to the `Stock Fund
-AI Research` Output Channel with timestamps and bounded titles. Use `Stock Fund:
-Show AI Research Output` or `Stock Fund: Clear AI Research Output`. API keys,
+Successful general and stock AI responses are also appended to the `TickerDock
+AI Research` Output Channel with timestamps and bounded titles. Use `TickerDock:
+Show AI Research Output` or `TickerDock: Clear AI Research Output`. API keys,
 request headers, and raw stock-analysis inputs are never written there.
 
 ## Commands
@@ -105,16 +105,24 @@ pnpm package:vsix
 
 `pnpm test:integration` launches the extension in the VS Code 1.85.2 baseline
 host and verifies activation, contributed-command registration, and a live
-configuration reload. `pnpm package:vsix` writes a minimal beta package to
-`stock-fund.vsix`; `pnpm release:check` runs unit checks, integration tests, and
+configuration reload. `pnpm package:vsix` writes the Marketplace package to
+`tickerdock.vsix`; `pnpm release:check` runs unit checks, integration tests, and
 packaging together.
 
-The extension uses `stock-fund.*` settings and falls back to existing
+Pushing a version tag such as `v0.1.0` runs the release workflow, verifies that
+the tag matches the extension version, publishes `tickerdock.vsix` to the VS
+Code Marketplace, and creates a GitHub Release. The repository must define a
+`VSCE_PAT` Actions secret with Marketplace publish permission.
+Version `0.1.0` is published as a Marketplace pre-release and a GitHub
+pre-release; remove the corresponding flags from the release workflow when the
+extension is ready for its first stable release.
+
+The extension uses `tickerdock.*` settings and falls back to existing
 `leek-fund.*` values until a new value is explicitly configured. Legacy codes
 are translated only at the data-source boundary, so users do not need to
 recreate their watchlists.
 
-Open this directory in VS Code and run `Run Stock Fund Extension` from the
+Open this directory in VS Code and run `Run TickerDock Extension` from the
 Run and Debug view to launch an Extension Development Host. See
 `docs/MIGRATION.md` for the completed scope and the next migration slices.
 
@@ -122,8 +130,8 @@ Xueqiu requires a Cookie copied from an authenticated browser session. Configure
 it with `Configure Xueqiu Cookie`; it is never copied automatically from a
 browser or written to normal VS Code settings.
 
-`Stock Fund: Export Settings` writes a versioned JSON backup containing only
-supported non-secret settings. `Stock Fund: Import Settings` also accepts legacy
+`TickerDock: Export Settings` writes a versioned JSON backup containing only
+supported non-secret settings. `TickerDock: Import Settings` also accepts legacy
 flat `leek-fund.*` exports, validates every supported value, excludes legacy
 Cookie/API-key fields, and creates a rollback backup before changing settings.
 
@@ -139,7 +147,7 @@ verification prompt. Index, Hong Kong, and US codes use the fixed standard
 page, while futures use a fixed Sina quote page. The host constructs every
 destination from validated internal codes; arbitrary targets are not accepted.
 The legacy numeric `stockKLineChartSwitch` value maps to the persisted
-`stock-fund.stockChartMode` setting.
+`tickerdock.stockChartMode` setting.
 
 Fund NAV ranges from one month through all history remain locally rendered.
 Clicking a Binance pair opens the original embedded TradingView spot chart for
@@ -151,7 +159,7 @@ editor tab. Selecting another item updates and reveals that tab instead of
 opening an additional editor.
 
 Stock extended details are available from a stock item context menu or the
-`Stock Fund: View Extended Stock Details` command. The page combines the live
+`TickerDock: View Extended Stock Details` command. The page combines the live
 quote, 20-day and 60-day averages, recent support and resistance, derived
 take-profit and stop-loss reference levels, and related Jiuyangongshe research.
 The levels are calculated from local K-lines and are not investment advice.
@@ -180,7 +188,7 @@ Reminder quote snapshots and cooldown timestamps are persisted in VS Code global
 state. Writes are coalesced during normal refreshes and committed immediately
 when a reminder fires, preventing duplicate threshold notifications after a
 restart. Invalid or older-than-seven-day state is discarded.
-Use `Stock Fund: Toggle Stock Reminders` to suspend or resume notifications
+Use `TickerDock: Toggle Stock Reminders` to suspend or resume notifications
 without removing configured thresholds.
 
 Automatic stock and fund refreshes are market-session aware. A-share, Hong Kong,
@@ -188,7 +196,7 @@ US, domestic-futures, and global-futures codes are filtered independently using
 their local IANA time zones; US daylight saving time is handled automatically.
 Known 2026 exchange holidays are included, with weekday/session fallback for
 other years. Initial, manual, and configuration-triggered refreshes always run.
-Use `Stock Fund: Toggle Market-Hours Scheduling` to restore unrestricted polling.
+Use `TickerDock: Toggle Market-Hours Scheduling` to restore unrestricted polling.
 
 The Fund view can compare two to six watched funds over 1-month, 3-month,
 6-month, 1-year, or full-history ranges. Each NAV series is normalized to period
@@ -209,8 +217,8 @@ mapped automatically. Funds can also be sorted by ascending or descending
 position market value, including legacy `fundSort` values `2` and `-2`. Binance
 pairs also support persistent top/up/down ordering.
 
-Flash-news sources can be selected independently with `stock-fund.newsSources`.
-The optional `Stock Fund Flash News` Output Channel records only newly received
+Flash-news sources can be selected independently with `tickerdock.newsSources`.
+The optional `TickerDock Flash News` Output Channel records only newly received
 items and exposes an unread status item; important-item notifications are a
 separate opt-in setting. Initial polling establishes a per-source baseline so
 enabling a provider does not report its historical backlog as unread.

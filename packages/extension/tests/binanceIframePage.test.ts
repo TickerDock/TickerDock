@@ -10,7 +10,7 @@ describe('Binance iframe page', () => {
     expect(parsed.searchParams.get('enabled_features')).toBe('[]');
     expect(options).toMatchObject({
       symbol: 'BINANCE:BTCUSDT', interval: 'D', theme: 'dark',
-      frameElementId: 'stock-fund-binance-chart', allow_symbol_change: '1',
+      frameElementId: 'tickerdock-binance-chart', allow_symbol_change: '1',
       hide_side_toolbar: '0', save_image: '1', studies: '[]',
       style: '1', timezone: 'Etc/UTC', withdateranges: '1',
       studies_overrides: '{}', utm_medium: 'widget', utm_campaign: 'chart',

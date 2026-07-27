@@ -1,5 +1,5 @@
 import { Uri, ViewColumn, WebviewPanel, window } from 'vscode';
-import { FundInsightsGateway } from '@stock-fund/domain';
+import { FundInsightsGateway } from '@tickerdock/domain';
 import { renderWebviewUi, webviewUiRoot } from './webviewUi';
 
 let detailPanel: WebviewPanel | undefined;
@@ -22,14 +22,15 @@ export async function showFundDetails(gateway: FundInsightsGateway, extensionUri
   }
 }
 
-export async function showFundHoldings(gateway: FundInsightsGateway, extensionUri: Uri, code: string): Promise<void> {
-  const panel = createPanel(`基金持仓：${code}`, extensionUri);
-  panel.webview.html = renderWebviewUi(panel.webview, extensionUri, { page: 'fundHoldings', code });
+export async function showFundHoldings(gateway: FundInsightsGateway, extensionUri: Uri, code: string, name = code): Promise<void> {
+  const title = `${name} 主要持仓`;
+  const panel = createPanel(title, extensionUri);
+  panel.webview.html = renderWebviewUi(panel.webview, extensionUri, { page: 'fundHoldings', code, name });
   try {
     const items = await gateway.getHoldings(code);
-    panel.webview.html = renderWebviewUi(panel.webview, extensionUri, { page: 'fundHoldings', code, items });
+    panel.webview.html = renderWebviewUi(panel.webview, extensionUri, { page: 'fundHoldings', code, name, items });
   } catch (error) {
-    panel.webview.html = renderWebviewUi(panel.webview, extensionUri, { page: 'fundHoldings', code, error: errorMessage(error) });
+    panel.webview.html = renderWebviewUi(panel.webview, extensionUri, { page: 'fundHoldings', code, name, error: errorMessage(error) });
   }
 }
 
@@ -58,7 +59,7 @@ export async function showFundFlows(gateway: FundInsightsGateway, extensionUri: 
 }
 
 function createPanel(title: string, extensionUri: Uri): WebviewPanel {
-  return window.createWebviewPanel('stockFundInsights', title, ViewColumn.One, {
+  return window.createWebviewPanel('tickerdockInsights', title, ViewColumn.One, {
     enableScripts: true,
     retainContextWhenHidden: false,
     localResourceRoots: [webviewUiRoot(extensionUri)],
@@ -71,7 +72,7 @@ function acquireDetailPanel(title: string, extensionUri: Uri): WebviewPanel {
     detailPanel.reveal(ViewColumn.One);
     return detailPanel;
   }
-  const panel = window.createWebviewPanel('stockFundExtendedFundDetail', title, ViewColumn.One, {
+  const panel = window.createWebviewPanel('tickerdockExtendedFundDetail', title, ViewColumn.One, {
     enableScripts: true,
     retainContextWhenHidden: false,
     localResourceRoots: [webviewUiRoot(extensionUri)],

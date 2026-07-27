@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { ProgressLocation, Uri, ViewColumn, WebviewPanel, window } from 'vscode';
-import { StockGateway, StockIwenCaiGateway, StockResearchGateway } from '@stock-fund/domain';
+import { StockGateway, StockIwenCaiGateway, StockResearchGateway } from '@tickerdock/domain';
 import { renderIwenCaiTokenPage } from './stockExtendedDetailPage';
 import { loadStockExtendedDetail } from './stockExtendedDetailLoader';
 import { renderWebviewUi, webviewUiRoot } from './webviewUi';
@@ -43,7 +43,7 @@ function acquirePanel(title: string, extensionUri: Uri): WebviewPanel {
     panel.reveal(ViewColumn.One);
     return panel;
   }
-  const created = window.createWebviewPanel('stockFundExtendedStockDetail', title, ViewColumn.One, {
+  const created = window.createWebviewPanel('tickerdockExtendedStockDetail', title, ViewColumn.One, {
     enableScripts: true,
     retainContextWhenHidden: false,
     localResourceRoots: [Uri.joinPath(extensionUri, 'assets'), webviewUiRoot(extensionUri)],

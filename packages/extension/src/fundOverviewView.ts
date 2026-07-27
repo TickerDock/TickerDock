@@ -1,5 +1,5 @@
 import { Disposable, Uri, ViewColumn, WebviewPanel, window } from 'vscode';
-import { FundEstimateGateway, FundGateway, FundNav, FundQuote, mergeFundEstimates } from '@stock-fund/domain';
+import { FundEstimateGateway, FundGateway, FundNav, FundQuote, mergeFundEstimates } from '@tickerdock/domain';
 import { filterFundNavRange, FundTrendRange } from './trendModel';
 import { readWebviewEnvelope, renderWebviewUi, webviewUiRoot } from './webviewUi';
 
@@ -81,7 +81,7 @@ export async function showFundOverview(
 
 function acquirePanel(extensionUri: Uri): WebviewPanel {
   if (panel) { panel.title = 'Fund Trends'; panel.reveal(ViewColumn.One); return panel; }
-  const created = window.createWebviewPanel('stockFundFundOverview', 'Fund Trends', ViewColumn.One, {
+  const created = window.createWebviewPanel('tickerdockFundOverview', 'Fund Trends', ViewColumn.One, {
     enableScripts: true, retainContextWhenHidden: false,
     localResourceRoots: [webviewUiRoot(extensionUri)],
   });

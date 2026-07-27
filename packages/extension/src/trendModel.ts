@@ -1,4 +1,4 @@
-import { FundNav } from '@stock-fund/domain';
+import { FundNav } from '@tickerdock/domain';
 
 export type FundTrendRange = '1m' | '3m' | '6m' | '1y' | 'all';
 

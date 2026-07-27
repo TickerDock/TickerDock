@@ -1,4 +1,4 @@
-import { FundPosition, StockPosition } from '@stock-fund/domain';
+import { FundPosition, StockPosition } from '@tickerdock/domain';
 import { readWebviewEnvelope } from './webviewProtocol';
 
 export interface PositionManagerItem {

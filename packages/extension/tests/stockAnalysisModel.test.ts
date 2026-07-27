@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { FlashNewsItem } from '@stock-fund/domain';
+import { FlashNewsItem } from '@tickerdock/domain';
 import { buildStockAnalysisInput, researchKeywordForStockCode } from '../src/stockAnalysisModel';
 
 describe('buildStockAnalysisInput', () => {
@@ -28,7 +28,12 @@ describe('buildStockAnalysisInput', () => {
     }], news, [{
       id: 'r1', title: 'Research', summary: 'Detail', time: '2026-07-17 08:00:00',
       source: 'jiuyangongshe', url: 'https://www.jiuyangongshe.com/a/r1',
-    }])) as Record<string, any>;
+    }])) as {
+      klines: unknown[];
+      historyRange: string;
+      recentFlashNews: Array<Record<string, unknown>>;
+      recentStockResearch: Array<Record<string, unknown>>;
+    };
 
     expect(parsed.klines).toEqual([{
       date: '2026-07-16', open: 10, close: 11, high: 12, low: 9, volume: 100,

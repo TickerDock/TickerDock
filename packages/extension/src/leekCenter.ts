@@ -1,7 +1,7 @@
 import { env, Uri, ViewColumn, WebviewPanel, window } from 'vscode';
-import type { StockExtendedDetail } from '@stock-fund/domain';
+import type { StockExtendedDetail } from '@tickerdock/domain';
 import { getLeekCenterPage, LEEK_CENTER_PAGES, LeekCenterWatchlistData } from './leekCenterPages';
-import { getEastMoneyProxy } from './eastMoneyProxy';
+import { authenticateProxyUrl, EastMoneyProxy, getEastMoneyProxy } from './eastMoneyProxy';
 import { postWebviewMessage, readWebviewEnvelope, renderWebviewUi, webviewUiRoot } from './webviewUi';
 
 let panel: WebviewPanel | undefined;
@@ -33,11 +33,11 @@ export async function showLeekCenter(initialPageId?: string, options?: LeekCente
   }
   if (panel) {
     panel.reveal(ViewColumn.One);
-    if (requestedPage) panel.webview.html = renderHtml(panel, requestedPage, proxy.origin);
+    if (requestedPage) panel.webview.html = renderHtml(panel, requestedPage, proxy);
     return;
   }
   panel = window.createWebviewPanel(
-    'stockFundLeekCenter',
+    'tickerdockLeekCenter',
     'Leek Center',
     ViewColumn.One,
     {
@@ -47,7 +47,7 @@ export async function showLeekCenter(initialPageId?: string, options?: LeekCente
       localResourceRoots: [Uri.joinPath(activeOptions?.extensionUri ?? Uri.file(''), 'assets'), webviewUiRoot(activeOptions?.extensionUri ?? Uri.file(''))],
     }
   );
-  panel.webview.html = renderHtml(panel, requestedPage, proxy.origin);
+  panel.webview.html = renderHtml(panel, requestedPage, proxy);
   panel.webview.onDidReceiveMessage(async (message: unknown) => {
     const external = readWebviewEnvelope(message, 'openLeekExternal');
     if (typeof external?.pageId === 'string') {
@@ -83,9 +83,11 @@ export async function showLeekCenter(initialPageId?: string, options?: LeekCente
   panel.onDidDispose(() => { panel = undefined; activeOptions = undefined; });
 }
 
-function renderHtml(current: WebviewPanel, requestedPage: string | undefined, eastMoneyOrigin: string): string {
+function renderHtml(current: WebviewPanel, requestedPage: string | undefined, proxy: EastMoneyProxy): string {
   const tokenModuleUri = current.webview.asWebviewUri(Uri.joinPath(activeOptions?.extensionUri ?? Uri.file(''), 'assets', 'hexin-v.js')).toString();
-  const pages = LEEK_CENTER_PAGES.map((page) => page.id === 'wind-vane' ? { ...page, url: `${eastMoneyOrigin}/zhuti/#ggfxb` } : page);
+  const pages = LEEK_CENTER_PAGES.map((page) => page.id === 'wind-vane'
+    ? { ...page, url: authenticateProxyUrl(`${proxy.origin}/zhuti/#ggfxb`, proxy) }
+    : page);
   return renderWebviewUi(current.webview, activeOptions?.extensionUri ?? Uri.file(''), {
     page: 'leekCenter', pages, initialPageId: requestedPage ?? 'bull-bear', watchlist: activeOptions?.watchlist ?? { stocks: [], funds: [], updatedAt: Date.now() },
   }, { tokenModuleUri });

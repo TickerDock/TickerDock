@@ -1,12 +1,16 @@
 import { createServer, IncomingHttpHeaders, IncomingMessage, Server, ServerResponse } from 'node:http';
 import { request as httpsRequest } from 'node:https';
+import { randomBytes, timingSafeEqual } from 'node:crypto';
 
 const EAST_MONEY_ORIGIN = 'https://quote.eastmoney.com';
 const MAX_REWRITE_BYTES = 12 * 1024 * 1024;
+const AUTH_QUERY = '__stock_fund_token';
+const AUTH_COOKIE = 'stock_fund_proxy';
 
 export interface EastMoneyProxy {
   origin: string;
   port: number;
+  token: string;
 }
 
 let service: EastMoneyProxy | undefined;
@@ -27,6 +31,13 @@ export function stopEastMoneyProxy(): void {
   active?.close();
 }
 
+export function authenticateProxyUrl(value: string, proxy: EastMoneyProxy): string {
+  const url = new URL(value);
+  if (url.origin !== proxy.origin) return value;
+  url.searchParams.set(AUTH_QUERY, proxy.token);
+  return url.toString();
+}
+
 export function rewriteEastMoneyText(body: string, proxyOrigin: string): string {
   const escapedOrigin = proxyOrigin.replace(/\//g, '\\/');
   return body
@@ -42,7 +53,7 @@ function startProxy(): Promise<EastMoneyProxy> {
     created.once('error', reject);
     created.listen(0, '127.0.0.1', () => {
       created.removeListener('error', reject);
-      created.on('error', (error) => console.error('[stock-fund] EastMoney proxy error', error));
+      created.on('error', (error) => console.error('[tickerdock] EastMoney proxy error', error));
       const address = created.address();
       if (!address || typeof address === 'string') {
         created.close();
@@ -50,7 +61,7 @@ function startProxy(): Promise<EastMoneyProxy> {
         return;
       }
       server = created;
-      service = { port: address.port, origin: `http://localhost:${address.port}` };
+      service = { port: address.port, origin: `http://localhost:${address.port}`, token: randomBytes(24).toString('base64url') };
       resolve(service);
     });
   });
@@ -58,13 +69,34 @@ function startProxy(): Promise<EastMoneyProxy> {
 
 function proxyRequest(request: IncomingMessage, response: ServerResponse): void {
   if (request.method === 'OPTIONS') {
+    if (!isAllowedCorsOrigin(request.headers.origin)) {
+      response.writeHead(403);
+      response.end();
+      return;
+    }
     writeCorsHeaders(request, response);
     response.writeHead(204);
     response.end();
     return;
   }
 
+  if (request.method !== 'GET' && request.method !== 'HEAD') {
+    response.writeHead(405, { allow: 'GET, HEAD, OPTIONS' });
+    response.end();
+    return;
+  }
+
   const localUrl = new URL(request.url ?? '/', 'http://127.0.0.1');
+  const queryToken = localUrl.searchParams.get(AUTH_QUERY);
+  localUrl.searchParams.delete(AUTH_QUERY);
+  const cookieToken = readCookie(request.headers.cookie, AUTH_COOKIE);
+  if (!service || (!safeTokenEqual(queryToken, service.token)
+    && !safeTokenEqual(cookieToken, service.token)
+    && !isTrustedProxySubresource(request.headers, service.origin))) {
+    response.writeHead(403, { 'content-type': 'text/plain; charset=utf-8' });
+    response.end('Forbidden');
+    return;
+  }
   const upstreamUrl = new URL(`${localUrl.pathname}${localUrl.search}`, EAST_MONEY_ORIGIN);
   const headers: IncomingHttpHeaders = { ...request.headers };
   delete headers.host;
@@ -142,7 +174,11 @@ function sanitizeResponseHeaders(source: IncomingHttpHeaders): IncomingHttpHeade
     headers.location = rewriteEastMoneyText(location, service.origin);
   }
   const cookies = headers['set-cookie'];
-  if (cookies) headers['set-cookie'] = cookies.map(rewriteCookieForLocalhost);
+  const upstreamCookies = cookies?.map(rewriteCookieForLocalhost) ?? [];
+  if (service) headers['set-cookie'] = [
+    ...upstreamCookies,
+    `${AUTH_COOKIE}=${service.token}; Path=/; HttpOnly; SameSite=Strict`,
+  ];
   return headers;
 }
 
@@ -159,11 +195,45 @@ function writeCorsHeaders(
   headers: IncomingHttpHeaders = {}
 ): void {
   const origin = typeof request.headers.origin === 'string' ? request.headers.origin : '*';
-  headers['access-control-allow-origin'] = origin === 'null' ? '*' : origin;
-  headers['access-control-allow-methods'] = 'GET,POST,PUT,DELETE,OPTIONS';
+  if (isAllowedCorsOrigin(origin)) headers['access-control-allow-origin'] = origin === 'null' ? '*' : origin;
+  headers['access-control-allow-methods'] = 'GET,HEAD,OPTIONS';
   headers['access-control-allow-headers'] = String(request.headers['access-control-request-headers'] ?? '*');
-  if (origin !== '*' && origin !== 'null') headers['access-control-allow-credentials'] = 'true';
+  if (isAllowedCorsOrigin(origin) && origin !== '*' && origin !== 'null') headers['access-control-allow-credentials'] = 'true';
   for (const [name, value] of Object.entries(headers)) {
     if (value !== undefined) response.setHeader(name, value);
+  }
+}
+
+function readCookie(header: string | undefined, name: string): string | undefined {
+  return header?.split(';').map((part) => part.trim()).find((part) => part.startsWith(`${name}=`))?.slice(name.length + 1);
+}
+
+function safeTokenEqual(value: string | null | undefined, expected: string): boolean {
+  if (!value) return false;
+  const actualBytes = Buffer.from(value);
+  const expectedBytes = Buffer.from(expected);
+  return actualBytes.length === expectedBytes.length && timingSafeEqual(actualBytes, expectedBytes);
+}
+
+export function isTrustedProxySubresource(headers: IncomingHttpHeaders, proxyOrigin: string): boolean {
+  if (headers['sec-fetch-site'] !== 'same-origin' || typeof headers.referer !== 'string') return false;
+  try {
+    return new URL(headers.referer).origin === proxyOrigin;
+  } catch {
+    return false;
+  }
+}
+
+function isAllowedCorsOrigin(value: string | string[] | undefined): boolean {
+  if (value === undefined || value === 'null' || value === '*') return true;
+  if (Array.isArray(value)) return false;
+  try {
+    const origin = new URL(value);
+    return origin.protocol === 'vscode-webview:'
+      || origin.hostname === 'localhost'
+      || origin.hostname === '127.0.0.1'
+      || (origin.protocol === 'https:' && origin.hostname.endsWith('.vscode-cdn.net'));
+  } catch {
+    return false;
   }
 }

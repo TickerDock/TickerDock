@@ -1,5 +1,7 @@
 node_modules/
+.pnpm-store/
 dist/
+.build/
 coverage/
 .vscode-test/
 packages/extension/dist-integration/

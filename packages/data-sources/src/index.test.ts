@@ -325,12 +325,12 @@ describe('EastMoneyFundInsightsGateway', () => {
 
   it('parses extended fund-page metadata and similar-fund performance', () => {
     const html = `<div class="fundDetail-tit"><div>Example Fund(001632)</div></div>
-      <div class="infoOfFund">类型：指数型-股票 | 中高风险规模�?9.85亿元�?026-03-31）基金经理：沙川
-      �?�?日：2015-07-29 �?�?人：天弘基金 基金评级�?span class="jjpj2"></span>
-      跟踪标的：中证食品饮料指�?| 年化跟踪误差�?.25%</div>
+      <div class="infoOfFund">类型：指数型-股票 | 中高风险规模：39.85亿元（2026-03-31）基金经理：沙川
+      成立日：2015-07-29 管理人：天弘基金 基金评级：<span class="jjpj2"></span>
+      跟踪标的：中证食品饮料指数 | 年化跟踪误差：1.25%</div>
       <div class="rankInSimilarWrap"><div class="buyFundItem_fundMsg">
         <a class="shortName" href="http://fund.eastmoney.com/008326.html" title="Peer Fund">Peer</a>
-        <span class="buyFundItem_date">�?�?/span><span class="buyFundItem_rate">+21.60%</span>
+        <span class="buyFundItem_date">近1年</span><span class="buyFundItem_rate">+21.60%</span>
       </div></div>`;
     expect(parseEastMoneyFundDetailPage(html, '001632')).toMatchObject({
       code: '001632', name: 'Example Fund', riskLevel: '中高风险',
@@ -368,7 +368,7 @@ describe('EastMoneyFundInsightsGateway', () => {
     const request = async (input: string | URL | Request) => {
       const url = String(input);
       if (url === 'https://fund.eastmoney.com/001632.html') {
-        return new Response('<div class="fundDetail-tit"><div>Example Fund(001632)</div></div><div class="infoOfFund">类型：指数型-股票 | 中高风险规模�?亿元�?026-03-31）基金经理：Manager �?�?日：2020-01-01 �?�?人：Company 基金评级�?/div>');
+        return new Response('<div class="fundDetail-tit"><div>Example Fund(001632)</div></div><div class="infoOfFund">类型：指数型-股票 | 中高风险规模：1亿元（2026-03-31）基金经理：Manager 成立日：2020-01-01 管理人：Company 基金评级：</div>');
       }
       throw new Error('optional source offline');
     };

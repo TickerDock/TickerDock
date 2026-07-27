@@ -1,5 +1,5 @@
 import { ConfigurationTarget, workspace } from 'vscode';
-import { FundPosition, StockPosition, StockReminderRule } from '@stock-fund/domain';
+import { FundPosition, StockPosition, StockReminderRule } from '@tickerdock/domain';
 import { asRecord, parseFundPositions, parseStockPositions } from './positionConfig';
 import { FundSortMode, legacyFundSortMode, legacySortMode, SortMode } from './sortModel';
 import { StockChartMode } from './stockIframePage';
@@ -33,8 +33,23 @@ export interface AiConfig {
 export type AiStockHistoryRange = '1w' | '1m' | '3m' | '6m' | '1y';
 
 export class ConfigRepository {
+  async migrateBetaNamespace(): Promise<void> {
+    const current = workspace.getConfiguration('tickerdock');
+    const beta = workspace.getConfiguration('stock-fund');
+    for (const key of MIGRATABLE_BETA_KEYS) {
+      const target = current.inspect<unknown>(key);
+      const source = beta.inspect<unknown>(key);
+      if (target?.globalValue === undefined && source?.globalValue !== undefined) {
+        await current.update(key, source.globalValue, ConfigurationTarget.Global);
+      }
+      if (target?.workspaceValue === undefined && source?.workspaceValue !== undefined) {
+        await current.update(key, source.workspaceValue, ConfigurationTarget.Workspace);
+      }
+    }
+  }
+
   getSectors(): Sector[] {
-    const value = workspace.getConfiguration('stock-fund').get<unknown>('sectors', []);
+    const value = workspace.getConfiguration('tickerdock').get<unknown>('sectors', []);
     if (!Array.isArray(value)) return [];
     return value.flatMap((item) => {
       if (!item || typeof item !== 'object') return [];
@@ -58,7 +73,7 @@ export class ConfigRepository {
   }
 
   getStockGroups(defaultCodes: string[]): StockWatchGroup[] {
-    const current = workspace.getConfiguration('stock-fund');
+    const current = workspace.getConfiguration('tickerdock');
     const lists = current.get<unknown>('stockLists');
     const legacyCodes = this.getStocks(defaultCodes);
     const groups = resolveStockWatchGroups(
@@ -155,7 +170,7 @@ export class ConfigRepository {
   }
 
   getMarketHoursEnabled(): boolean {
-    return workspace.getConfiguration('stock-fund').get<boolean>('marketHoursEnabled', true);
+    return workspace.getConfiguration('tickerdock').get<boolean>('marketHoursEnabled', true);
   }
 
   async setMarketHoursEnabled(enabled: boolean): Promise<void> {
@@ -163,7 +178,7 @@ export class ConfigRepository {
   }
 
   getStockChartMode(): StockChartMode {
-    const current = workspace.getConfiguration('stock-fund');
+    const current = workspace.getConfiguration('tickerdock');
     if (hasExplicitValue(current.inspect<string>('stockChartMode'))) {
       return current.get('stockChartMode') === 'chips' ? 'chips' : 'standard';
     }
@@ -177,7 +192,7 @@ export class ConfigRepository {
   }
 
   getHeldStockHighlightEnabled(): boolean {
-    const current = workspace.getConfiguration('stock-fund');
+    const current = workspace.getConfiguration('tickerdock');
     if (hasExplicitValue(current.inspect<boolean>('heldStockHighlightEnabled'))) {
       return current.get('heldStockHighlightEnabled', true);
     }
@@ -189,7 +204,7 @@ export class ConfigRepository {
   }
 
   getPersonalization(): PersonalizationConfig {
-    const current = workspace.getConfiguration('stock-fund');
+    const current = workspace.getConfiguration('tickerdock');
     const legacy = workspace.getConfiguration('leek-fund');
     const legacyFormats = asRecord(legacy.get<unknown>('labelFormat', {}));
     const readString = (key: keyof PersonalizationConfig, legacyValue: unknown, fallback: string): string => {
@@ -247,7 +262,7 @@ export class ConfigRepository {
 
   getStockSortMode(): SortMode { return this.getSortMode('stockSortMode', 'stockSort'); }
   getFundSortMode(): FundSortMode {
-    const current = workspace.getConfiguration('stock-fund');
+    const current = workspace.getConfiguration('tickerdock');
     if (hasExplicitValue(current.inspect<string>('fundSortMode'))) return legacyFundSortMode(current.get('fundSortMode'));
     return legacyFundSortMode(workspace.getConfiguration('leek-fund').get('fundSort', 0));
   }
@@ -266,29 +281,29 @@ export class ConfigRepository {
   }
 
   getBinanceInterval(): number {
-    return Math.max(workspace.getConfiguration('stock-fund').get<number>('binanceInterval', 10000), 5000);
+    return Math.max(workspace.getConfiguration('tickerdock').get<number>('binanceInterval', 10000), 5000);
   }
 
   getForexInterval(): number {
-    return Math.max(workspace.getConfiguration('stock-fund').get<number>('forexInterval', 3600000), 300000);
+    return Math.max(workspace.getConfiguration('tickerdock').get<number>('forexInterval', 3600000), 300000);
   }
 
   getNewsInterval(): number {
-    return Math.max(workspace.getConfiguration('stock-fund').get<number>('newsInterval', 15000), 10000);
+    return Math.max(workspace.getConfiguration('tickerdock').get<number>('newsInterval', 15000), 10000);
   }
 
   getImportantNewsOnly(): boolean {
-    return workspace.getConfiguration('stock-fund').get<boolean>('importantNewsOnly', false);
+    return workspace.getConfiguration('tickerdock').get<boolean>('importantNewsOnly', false);
   }
 
   getNewsSources(): Array<'jin10' | 'xuangubao'> {
-    const value = workspace.getConfiguration('stock-fund').get<unknown>('newsSources', ['jin10', 'xuangubao']);
+    const value = workspace.getConfiguration('tickerdock').get<unknown>('newsSources', ['jin10', 'xuangubao']);
     if (!Array.isArray(value)) return ['jin10', 'xuangubao'];
     return [...new Set(value.filter((item): item is 'jin10' | 'xuangubao' => item === 'jin10' || item === 'xuangubao'))];
   }
 
   getFlashNewsOutputEnabled(): boolean {
-    const current = workspace.getConfiguration('stock-fund');
+    const current = workspace.getConfiguration('tickerdock');
     if (hasExplicitValue(current.inspect<boolean>('flashNewsOutputEnabled'))) {
       return current.get('flashNewsOutputEnabled', false);
     }
@@ -300,11 +315,11 @@ export class ConfigRepository {
   }
 
   getFlashNewsNotificationsEnabled(): boolean {
-    return workspace.getConfiguration('stock-fund').get<boolean>('flashNewsNotificationsEnabled', false);
+    return workspace.getConfiguration('tickerdock').get<boolean>('flashNewsNotificationsEnabled', false);
   }
 
   getAiConfig(): AiConfig {
-    const configuration = workspace.getConfiguration('stock-fund');
+    const configuration = workspace.getConfiguration('tickerdock');
     const apiMode = configuration.get<string>('aiApiMode', 'responses');
     return {
       baseUrl: configuration.get('aiBaseUrl', 'https://api.openai.com/v1'),
@@ -322,7 +337,7 @@ export class ConfigRepository {
   }
 
   getAiStockHistoryRange(): AiStockHistoryRange {
-    const current = workspace.getConfiguration('stock-fund');
+    const current = workspace.getConfiguration('tickerdock');
     if (hasExplicitValue(current.inspect<string>('aiStockHistoryRange'))) {
       return aiStockHistoryRange(current.get('aiStockHistoryRange'));
     }
@@ -334,8 +349,8 @@ export class ConfigRepository {
   }
 
   getShowPortfolio(): boolean {
-    const current = workspace.getConfiguration('stock-fund').inspect<boolean>('showPortfolio');
-    if (hasExplicitValue(current)) return workspace.getConfiguration('stock-fund').get('showPortfolio', true);
+    const current = workspace.getConfiguration('tickerdock').inspect<boolean>('showPortfolio');
+    if (hasExplicitValue(current)) return workspace.getConfiguration('tickerdock').get('showPortfolio', true);
     const legacy = workspace.getConfiguration('leek-fund');
     return legacy.get<number>('showEarnings', 1) !== 0 && !legacy.get<boolean>('hideStatusBar', false);
   }
@@ -349,7 +364,7 @@ export class ConfigRepository {
   }
 
   getShowStockPortfolioStatusBar(): boolean {
-    const current = workspace.getConfiguration('stock-fund');
+    const current = workspace.getConfiguration('tickerdock');
     if (hasExplicitValue(current.inspect<boolean>('showStockPortfolioStatusBar'))) {
       return current.get('showStockPortfolioStatusBar', true);
     }
@@ -361,7 +376,7 @@ export class ConfigRepository {
   }
 
   getShowFundPortfolioStatusBar(): boolean {
-    const current = workspace.getConfiguration('stock-fund');
+    const current = workspace.getConfiguration('tickerdock');
     if (hasExplicitValue(current.inspect<boolean>('showFundPortfolioStatusBar'))) {
       return current.get('showFundPortfolioStatusBar', true);
     }
@@ -374,7 +389,7 @@ export class ConfigRepository {
   }
 
   async repairLegacyFundPortfolioVisibility(): Promise<boolean> {
-    const current = workspace.getConfiguration('stock-fund');
+    const current = workspace.getConfiguration('tickerdock');
     const legacy = workspace.getConfiguration('leek-fund');
     const incorrectlyHidden = current.get<boolean>('showFundPortfolioStatusBar', true) === false
       && legacy.get<boolean>('hideFundBarItem', false)
@@ -396,8 +411,8 @@ export class ConfigRepository {
   }
 
   getShowMarketStatusBar(): boolean {
-    const current = workspace.getConfiguration('stock-fund').inspect<boolean>('showMarketStatusBar');
-    if (hasExplicitValue(current)) return workspace.getConfiguration('stock-fund').get('showMarketStatusBar', true);
+    const current = workspace.getConfiguration('tickerdock').inspect<boolean>('showMarketStatusBar');
+    if (hasExplicitValue(current)) return workspace.getConfiguration('tickerdock').get('showMarketStatusBar', true);
     const legacy = workspace.getConfiguration('leek-fund');
     return !legacy.get<boolean>('hideStatusBar', false) && !legacy.get<boolean>('hideStatusBarStock', false);
   }
@@ -407,8 +422,8 @@ export class ConfigRepository {
   }
 
   getShowStatusBarIcons(): boolean {
-    const current = workspace.getConfiguration('stock-fund').inspect<boolean>('showStatusBarIcons');
-    if (hasExplicitValue(current)) return workspace.getConfiguration('stock-fund').get('showStatusBarIcons', true);
+    const current = workspace.getConfiguration('tickerdock').inspect<boolean>('showStatusBarIcons');
+    if (hasExplicitValue(current)) return workspace.getConfiguration('tickerdock').get('showStatusBarIcons', true);
     return !workspace.getConfiguration('leek-fund').get<boolean>('hideStatusBarIcon', false);
   }
 
@@ -417,8 +432,8 @@ export class ConfigRepository {
   }
 
   getRemindersEnabled(): boolean {
-    const current = workspace.getConfiguration('stock-fund').inspect<boolean>('remindersEnabled');
-    if (hasExplicitValue(current)) return workspace.getConfiguration('stock-fund').get('remindersEnabled', true);
+    const current = workspace.getConfiguration('tickerdock').inspect<boolean>('remindersEnabled');
+    if (hasExplicitValue(current)) return workspace.getConfiguration('tickerdock').get('remindersEnabled', true);
     return this.readCompatible<number>('stockRemindSwitch', 1) !== 0;
   }
 
@@ -472,22 +487,41 @@ export class ConfigRepository {
   }
 
   private readCompatible<T>(key: string, defaultValue: T): T {
-    const current = workspace.getConfiguration('stock-fund');
+    const current = workspace.getConfiguration('tickerdock');
     const inspected = current.inspect<T>(key);
     if (hasExplicitValue(inspected)) return current.get<T>(key, defaultValue);
+    const beta = workspace.getConfiguration('stock-fund');
+    if (hasExplicitValue(beta.inspect<T>(key))) return beta.get<T>(key, defaultValue);
     return workspace.getConfiguration('leek-fund').get<T>(key, defaultValue);
   }
 
   private getSortMode(key: string, legacyKey: string): SortMode {
-    const current = workspace.getConfiguration('stock-fund');
+    const current = workspace.getConfiguration('tickerdock');
     if (hasExplicitValue(current.inspect<string>(key))) return legacySortMode(current.get(key));
+    const beta = workspace.getConfiguration('stock-fund');
+    if (hasExplicitValue(beta.inspect<string>(key))) return legacySortMode(beta.get(key));
     return legacySortMode(workspace.getConfiguration('leek-fund').get(legacyKey, 0));
   }
 
   private async write(key: string, value: unknown): Promise<void> {
-    await workspace.getConfiguration('stock-fund').update(key, value, ConfigurationTarget.Global);
+    await workspace.getConfiguration('tickerdock').update(key, value, ConfigurationTarget.Global);
   }
 }
+
+const MIGRATABLE_BETA_KEYS = [
+  'stocks', 'stockGroups', 'stockLists', 'funds', 'fundGroups', 'interval',
+  'marketHoursEnabled', 'stockChartMode', 'heldStockHighlightEnabled',
+  'sidebarDisplayMode', 'stockLabelTemplate', 'fundLabelTemplate',
+  'statusBarLabelTemplate', 'stockPortfolioTemplate', 'fundPortfolioTemplate',
+  'changeIconStyle', 'useCustomStatusBarColors', 'riseColor', 'fallColor',
+  'stockSortMode', 'fundSortMode', 'stockPrice', 'fundAmount', 'showPortfolio',
+  'showStockPortfolioStatusBar', 'showFundPortfolioStatusBar', 'statusBarStocks',
+  'showMarketStatusBar', 'showStatusBarIcons', 'stocksRemind', 'remindersEnabled',
+  'binance', 'binanceSortMode', 'binanceInterval', 'forexInterval', 'newsInterval',
+  'newsSources', 'importantNewsOnly', 'flashNewsOutputEnabled',
+  'flashNewsNotificationsEnabled', 'sectors', 'aiBaseUrl', 'aiModel', 'aiApiMode',
+  'aiStockHistoryRange',
+] as const;
 
 function hasExplicitValue<T>(inspected: {
   globalValue?: T;

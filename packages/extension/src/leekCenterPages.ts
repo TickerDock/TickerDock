@@ -1,4 +1,4 @@
-import type { FundQuote, StockQuote } from '@stock-fund/domain';
+import type { FundQuote, StockQuote } from '@tickerdock/domain';
 
 export interface LeekCenterWatchlistData {
   stocks: Array<{ name: string; items: StockQuote[] }>;
@@ -24,7 +24,7 @@ export const LEEK_CENTER_PAGES: readonly LeekCenterPage[] = [
   { id: 'wind-vane', title: '股票风向标', description: '题材、行业与市场情绪概览', group: 'Market', url: 'https://quote.eastmoney.com/zhuti/#ggfxb' },
   { id: 'northbound-flow', title: '沪深港通资金流', description: '沪股通、深股通和港股通资金流向', group: 'Market', url: 'https://emrnweb.eastmoney.com/hsgt/home' },
   { id: 'main-capital-flow', title: '主力资金流', description: '全市场主力资金流入流出', group: 'Market', url: 'https://emdatah5.eastmoney.com/dc/zjlx/index' },
-  { id: 'capital-dashboard', title: '资金流看板', description: '交互式板块资金流看板', group: 'Market', url: 'https://view.le5le.com/v/?id=019749ca-8bc5-786f-aa04-913e3c62bea8' },
+  // { id: 'capital-dashboard', title: '资金流看板', description: '交互式板块资金流看板', group: 'Market', url: 'https://view.le5le.com/v/?id=019749ca-8bc5-786f-aa04-913e3c62bea8' },
   { id: 'dragon-tiger', title: '龙虎榜', description: '每日异动席位与交易明细', group: 'Trading', url: 'https://datapc.eastmoney.com/emdatacenter/Ranking/Index?color=b' },
   { id: 'block-trades', title: '大宗交易', description: '大额协议股票交易', group: 'Trading', url: 'https://datapc.eastmoney.com/emdatacenter/dzjy/index?color=b' },
   { id: 'margin', title: '融资融券', description: '融资买入与融券卖出数据', group: 'Trading', url: 'https://datapc.eastmoney.com/emdatacenter/rzrq/index?market=sh&color=b' },

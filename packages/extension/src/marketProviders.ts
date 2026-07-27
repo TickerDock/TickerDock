@@ -1,5 +1,5 @@
 import { Event, EventEmitter, ThemeIcon, TreeDataProvider, TreeItem, TreeItemCollapsibleState } from 'vscode';
-import { CryptoQuote, ForexQuote } from '@stock-fund/domain';
+import { CryptoQuote, ForexQuote } from '@tickerdock/domain';
 import { nextSortMode, SortMode, sortByChange } from './sortModel';
 
 export class CryptoTreeItem extends TreeItem {
@@ -19,7 +19,7 @@ export class CryptoTreeItem extends TreeItem {
       : `No quote returned for ${symbol}`;
     this.command = {
       title: 'View Binance details',
-      command: 'stock-fund.viewBinanceHistory',
+      command: 'tickerdock.viewBinanceHistory',
       arguments: [this],
     };
   }

@@ -3,7 +3,7 @@ import { ConfigRepository, Sector } from './configRepository';
 import { readWebviewEnvelope, renderWebviewUi, webviewUiRoot } from './webviewUi';
 
 export function showSectorManager(extensionUri: Uri, config: ConfigRepository, onSaved: (sectors: Sector[]) => void): void {
-  const panel = window.createWebviewPanel('stockFundSectors', '板块管理', ViewColumn.One, {
+  const panel = window.createWebviewPanel('tickerdockSectors', '板块管理', ViewColumn.One, {
     enableScripts: true,
     localResourceRoots: [webviewUiRoot(extensionUri)],
   });

@@ -5,7 +5,7 @@ export class AiOutputService implements Disposable {
   private readonly output: OutputChannel;
 
   constructor() {
-    this.output = window.createOutputChannel('Stock Fund AI Research');
+    this.output = window.createOutputChannel('TickerDock AI Research');
   }
 
   record(title: string, result: string): void {

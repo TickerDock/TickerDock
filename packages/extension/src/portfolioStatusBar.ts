@@ -1,5 +1,5 @@
 import { Disposable, StatusBarAlignment, StatusBarItem, window } from 'vscode';
-import { CnyFxRates, PortfolioSummary, PositionProfit, summarizePortfolio } from '@stock-fund/domain';
+import { CnyFxRates, PortfolioSummary, PositionProfit, summarizePortfolio } from '@tickerdock/domain';
 import { DEFAULT_PERSONALIZATION, PersonalizationConfig, renderTemplate } from './personalizationModel';
 
 export class PortfolioStatusBar implements Disposable {
@@ -17,8 +17,8 @@ export class PortfolioStatusBar implements Disposable {
     this.fundItem = window.createStatusBarItem(StatusBarAlignment.Left, 2);
     this.stockItem.name = '股票持仓';
     this.fundItem.name = '基金持仓';
-    this.stockItem.command = 'stock-fund.manageStockPositions';
-    this.fundItem.command = 'stock-fund.manageFundPositions';
+    this.stockItem.command = 'tickerdock.manageStockPositions';
+    this.fundItem.command = 'tickerdock.manageFundPositions';
   }
 
   setVisibility(stockVisible: boolean, fundVisible: boolean): void {

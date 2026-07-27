@@ -27,7 +27,7 @@ export function showPersonalization(
   const defaultStatusBarStocks = availableCodes.has('SH000001')
     ? ['SH000001']
     : availableStocks.slice(0, 1).map((stock) => stock.code);
-  const panel = window.createWebviewPanel('stockFundPersonalization', '个性化设置', ViewColumn.One, {
+  const panel = window.createWebviewPanel('tickerdockPersonalization', '个性化设置', ViewColumn.One, {
     enableScripts: true,
     retainContextWhenHidden: true,
     localResourceRoots: [webviewUiRoot(extensionUri)],

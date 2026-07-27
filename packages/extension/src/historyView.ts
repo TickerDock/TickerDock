@@ -1,12 +1,12 @@
 import { Disposable, Uri, ViewColumn, WebviewPanel, window } from 'vscode';
-import { FundGateway, FundNav, Kline, StockGateway } from '@stock-fund/domain';
+import { FundGateway, FundNav, Kline, StockGateway } from '@tickerdock/domain';
 import { filterFundNavRange, FundTrendRange } from './trendModel';
 import { readWebviewEnvelope, renderWebviewUi, webviewUiRoot } from './webviewUi';
 import {
   buildStockIframeTargets,
   StockChartMode,
 } from './stockIframePage';
-import { getEastMoneyProxy } from './eastMoneyProxy';
+import { authenticateProxyUrl, getEastMoneyProxy } from './eastMoneyProxy';
 
 interface TrendControl { id: string; label: string }
 
@@ -87,7 +87,11 @@ async function showMarketHistory(
     const proxy = await getEastMoneyProxy();
     const panel = acquireStockPanel(title, extensionUri, proxy.port);
     currentPanel = panel;
-    const targets = buildStockIframeTargets(code, proxy.origin);
+    const rawTargets = buildStockIframeTargets(code, proxy.origin);
+    const targets = {
+      standard: authenticateProxyUrl(rawTargets.standard, proxy),
+      chips: rawTargets.chips ? authenticateProxyUrl(rawTargets.chips, proxy) : undefined,
+    };
     let mode: StockChartMode = initialMode === 'chips' && targets.chips ? 'chips' : 'standard';
     const render = () => { panel.webview.html = renderWebviewUi(panel.webview, extensionUri, { page: 'stockMarketFrame', title, targets, mode }); };
     stockMessages = panel.webview.onDidReceiveMessage((message: unknown) => {
@@ -153,7 +157,7 @@ function acquireStockPanel(title: string, extensionUri: Uri, localPort?: number)
     stockPanel.reveal(ViewColumn.One);
     return stockPanel;
   }
-  const panel = createPanel('stockFundStockTrend', title, localPort, webviewUiRoot(extensionUri));
+  const panel = createPanel('tickerdockStockTrend', title, localPort, webviewUiRoot(extensionUri));
   stockPanel = panel;
   panel.onDidDispose(() => {
     if (stockPanel !== panel) return;
@@ -170,7 +174,7 @@ function acquireFundPanel(title: string, extensionUri: Uri): WebviewPanel {
     fundPanel.reveal(ViewColumn.One);
     return fundPanel;
   }
-  const panel = createPanel('stockFundFundTrend', title, undefined, webviewUiRoot(extensionUri));
+  const panel = createPanel('tickerdockFundTrend', title, undefined, webviewUiRoot(extensionUri));
   fundPanel = panel;
   panel.onDidDispose(() => {
     if (fundPanel !== panel) return;
@@ -184,7 +188,7 @@ function acquireFundPanel(title: string, extensionUri: Uri): WebviewPanel {
 
 function acquireKlinePanel(title: string, extensionUri: Uri): WebviewPanel {
   if (klinePanel) { klinePanel.title = title; klinePanel.reveal(ViewColumn.One); return klinePanel; }
-  const panel = createPanel('stockFundStockKline', title, undefined, webviewUiRoot(extensionUri));
+  const panel = createPanel('tickerdockStockKline', title, undefined, webviewUiRoot(extensionUri));
   klinePanel = panel;
   panel.onDidDispose(() => {
     if (klinePanel !== panel) return;

@@ -14,7 +14,7 @@ export function showBinanceIframe(extensionUri: Uri, symbol: string, name = symb
       panel.title = title;
       panel.reveal(ViewColumn.One);
     } else {
-      panel = window.createWebviewPanel('stockFundBinanceTrend', title, ViewColumn.One, {
+      panel = window.createWebviewPanel('tickerdockBinanceTrend', title, ViewColumn.One, {
         enableScripts: true,
         retainContextWhenHidden: false,
         localResourceRoots: [webviewUiRoot(extensionUri)],

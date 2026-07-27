@@ -9,7 +9,7 @@
 - `stock-api` adapter for A-share, Hong Kong, and US quotes, search, and K-lines.
 - `fund-api` adapter for fund NAV, search, and NAV history.
 - Disposable non-overlapping refresh scheduling.
-- Stock and fund TreeViews using `stock-fund.*` settings with `leek-fund.*` fallback.
+- Stock and fund TreeViews using `tickerdock.*` settings with `leek-fund.*` fallback.
 - Custom stock watchlist groups with add, rename, remove, and group-local stock
   management commands. Legacy flat lists migrate into `My Stocks`.
 - Unit tests for code translation, data normalization, missing results, and scheduling.
@@ -91,7 +91,7 @@
 - VS Code 1.85.2 Extension Host smoke tests for activation, all contributed
   commands, and live configuration reload.
 - Minimal side-by-side beta VSIX packaging under the local
-  `stock-fund-beta.stock-fund` extension identifier.
+  `tickerdock.tickerdock` extension identifier.
 
 ## Compatibility rules
 

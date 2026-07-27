@@ -1,5 +1,5 @@
 import { env, ProgressLocation, Uri, ViewColumn, window } from 'vscode';
-import { StockResearchGateway, StockResearchItem } from '@stock-fund/domain';
+import { StockResearchGateway, StockResearchItem } from '@tickerdock/domain';
 import { readWebviewEnvelope, renderWebviewUi, webviewUiRoot } from './webviewUi';
 
 export async function showStockResearch(
@@ -8,8 +8,8 @@ export async function showStockResearch(
   name: string,
   extensionUri: Uri
 ): Promise<void> {
-  const title = `${name} 研报`;
-  const panel = window.createWebviewPanel('stockFundStockResearch', title, ViewColumn.One, {
+  const title = name;
+  const panel = window.createWebviewPanel('tickerdockStockResearch', title, ViewColumn.One, {
     enableScripts: true,
     retainContextWhenHidden: false,
     localResourceRoots: [webviewUiRoot(extensionUri)],

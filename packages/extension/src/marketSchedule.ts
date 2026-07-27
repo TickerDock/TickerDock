@@ -24,8 +24,9 @@ export function marketForStockCode(code: string): ScheduledMarket | undefined {
   const normalized = code.toUpperCase();
   if (/^(SH|SZ)/.test(normalized)) return 'cn';
   if (normalized.startsWith('HK')) return 'hk';
-  if (/^(US|0(?:DJI|IXIC|INX))/.test(normalized)) return 'us';
-  if (normalized.startsWith('HF')) return 'global-future';
+  if (/^(US|USR_|GB_|0(?:DJI|IXIC|INX))/.test(normalized)) return 'us';
+  if (normalized.startsWith('NF_')) return 'cn-future';
+  if (/^(HF|HF_)/.test(normalized)) return 'global-future';
   return undefined;
 }
 

@@ -9,7 +9,7 @@ export class SectorTreeItem extends TreeItem {
     this.description = sector.code;
     this.contextValue = 'sector';
     this.iconPath = new ThemeIcon('layers');
-    this.command = { command: 'stock-fund.openSector', title: '打开板块详情', arguments: [this] };
+    this.command = { command: 'tickerdock.openSector', title: '打开板块详情', arguments: [this] };
   }
 }
 

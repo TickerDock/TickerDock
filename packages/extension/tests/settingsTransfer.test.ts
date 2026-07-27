@@ -5,10 +5,10 @@ describe('settings transfer', () => {
   it('exports only allowlisted non-secret settings', () => {
     const bundle = createSettingsBundle({ stocks: ['sh000001'], aiModel: 'model' }, '2026-07-16T00:00:00.000Z');
     expect(bundle).toEqual({
-      format: 'stock-fund-settings',
+      format: 'tickerdock-settings',
       version: 1,
       exportedAt: '2026-07-16T00:00:00.000Z',
-      settings: { 'stock-fund.stocks': ['sh000001'], 'stock-fund.aiModel': 'model' },
+      settings: { 'tickerdock.stocks': ['sh000001'], 'tickerdock.aiModel': 'model' },
     });
     expect(JSON.stringify(bundle)).not.toMatch(/cookie|apiKey/i);
   });
@@ -22,6 +22,17 @@ describe('settings transfer', () => {
       aiApiMode: 'responses', newsInterval: 15000,
     });
     expect(parsed.legacy).toBe(false);
+  });
+
+  it('imports stock-fund beta bundles as legacy data', () => {
+    const parsed = parseSettingsBundle({
+      format: 'stock-fund-settings',
+      version: 1,
+      exportedAt: '2026-07-16T00:00:00.000Z',
+      settings: { 'stock-fund.stocks': ['SH600519'] },
+    });
+    expect(parsed.settings.stocks).toEqual(['SH600519']);
+    expect(parsed.legacy).toBe(true);
   });
 
   it('maps legacy compatibility settings and excludes credentials', () => {
@@ -81,9 +92,9 @@ describe('settings transfer', () => {
 
   it('rejects invalid known values instead of partially accepting them', () => {
     expect(() => parseSettingsBundle({
-      'stock-fund.stocks': ['sh000001'],
-      'stock-fund.interval': 100,
-    })).toThrow('stock-fund.interval');
+      'tickerdock.stocks': ['sh000001'],
+      'tickerdock.interval': 100,
+    })).toThrow('tickerdock.interval');
   });
 
   it('round-trips custom stock groups and validates nested stock lists', () => {
@@ -96,8 +107,8 @@ describe('settings transfer', () => {
       stockGroups: ['A Shares', 'US'],
       stockLists: [['sh600519'], ['usr_aapl']],
     });
-    expect(() => parseSettingsBundle({ 'stock-fund.stockLists': ['sh600519'] }))
-      .toThrow('stock-fund.stockLists');
+    expect(() => parseSettingsBundle({ 'tickerdock.stockLists': ['sh600519'] }))
+      .toThrow('tickerdock.stockLists');
   });
 
   it('rejects unsupported versions', () => {
@@ -107,24 +118,24 @@ describe('settings transfer', () => {
 
   it('rejects more than four status bar stocks', () => {
     expect(() => parseSettingsBundle({
-      'stock-fund.statusBarStocks': ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i'],
-    })).toThrow('stock-fund.statusBarStocks');
+      'tickerdock.statusBarStocks': ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i'],
+    })).toThrow('tickerdock.statusBarStocks');
   });
 
   it('validates AI history ranges and fund amount sorting', () => {
     expect(parseSettingsBundle({
-      'stock-fund.fundSortMode': 'amount-ascending',
-      'stock-fund.aiStockHistoryRange': '3m',
+      'tickerdock.fundSortMode': 'amount-ascending',
+      'tickerdock.aiStockHistoryRange': '3m',
     }).settings).toEqual({ fundSortMode: 'amount-ascending', aiStockHistoryRange: '3m' });
     expect(() => parseSettingsBundle({
-      'stock-fund.aiStockHistoryRange': '2y',
-    })).toThrow('stock-fund.aiStockHistoryRange');
+      'tickerdock.aiStockHistoryRange': '2y',
+    })).toThrow('tickerdock.aiStockHistoryRange');
   });
 
   it('imports independent portfolio status-bar visibility', () => {
     const settings = parseSettingsBundle({
-      'stock-fund.showStockPortfolioStatusBar': false,
-      'stock-fund.showFundPortfolioStatusBar': true,
+      'tickerdock.showStockPortfolioStatusBar': false,
+      'tickerdock.showFundPortfolioStatusBar': true,
     }).settings;
     expect(settings).toMatchObject({
       showStockPortfolioStatusBar: false,
@@ -134,15 +145,15 @@ describe('settings transfer', () => {
 
   it('validates personalization settings', () => {
     expect(parseSettingsBundle({
-      'stock-fund.sidebarDisplayMode': 'template',
-      'stock-fund.stockLabelTemplate': '${code} ${name}',
-      'stock-fund.riseColor': '#AA1122',
+      'tickerdock.sidebarDisplayMode': 'template',
+      'tickerdock.stockLabelTemplate': '${code} ${name}',
+      'tickerdock.riseColor': '#AA1122',
     }).settings).toMatchObject({
       sidebarDisplayMode: 'template', stockLabelTemplate: '${code} ${name}', riseColor: '#AA1122',
     });
     expect(() => parseSettingsBundle({
-      'stock-fund.statusBarLabelTemplate': '${unknown}',
-    })).toThrow('stock-fund.statusBarLabelTemplate');
+      'tickerdock.statusBarLabelTemplate': '${unknown}',
+    })).toThrow('tickerdock.statusBarLabelTemplate');
   });
 
   it('applies the legacy global status bar hide regardless of key order', () => {

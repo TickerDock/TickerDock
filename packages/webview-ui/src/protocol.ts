@@ -28,6 +28,13 @@ export type PersonalizationState = {
   statusBarStocks: string[];
   availableStocks: PositionItem[];
 };
+export type AiSettingsState = {
+  baseUrl: string;
+  model: string;
+  apiMode: 'responses' | 'chat-completions';
+  historyRange: '1w' | '1m' | '3m' | '6m' | '1y';
+  hasApiKey: boolean;
+};
 export type StockResearchItem = { id: string; title: string; summary: string; time: string; source: string; url: string };
 export type FundHolding = { code: string; name: string; navRatio: number; sharesWan: number; marketValueWan: number; reportDate: string };
 export type FundRankItem = { code: string; name: string; nav: number; navDate: string; dayReturnRatio: number; weekReturnRatio?: number; monthReturnRatio?: number; threeMonthReturnRatio?: number; sixMonthReturnRatio?: number; yearReturnRatio?: number; yearToDateReturnRatio?: number };
@@ -69,9 +76,10 @@ export type Bootstrap =
   | { page: 'stockPositions'; items: PositionItem[]; positions: StockPosition[] }
   | { page: 'fundPositions'; items: PositionItem[]; positions: FundPosition[] }
   | { page: 'personalization'; state: PersonalizationState; defaults: PersonalizationState }
+  | { page: 'aiSettings'; state: AiSettingsState }
   | { page: 'stockResearch'; name: string; items?: StockResearchItem[] }
   | { page: 'fundDetail'; title: string; detail?: FundExtendedDetail; error?: string }
-  | { page: 'fundHoldings'; code: string; items?: FundHolding[]; error?: string }
+  | { page: 'fundHoldings'; code: string; name: string; items?: FundHolding[]; error?: string }
   | { page: 'fundRanking'; items?: FundRankItem[]; error?: string }
   | { page: 'fundFlows'; industry?: FundFlowItem[]; concept?: FundFlowItem[]; region?: FundFlowItem[]; error?: string }
   | { page: 'marketSentiment'; snapshot?: MarketSentimentSnapshot; error?: string }
@@ -87,10 +95,11 @@ export type Bootstrap =
 
 export type HostMessage = {
   version: typeof PROTOCOL_VERSION;
-  type: 'saveSectors' | 'saveStockPositions' | 'saveFundPositions' | 'savePersonalization'
+  type: 'saveSectors' | 'saveStockPositions' | 'saveFundPositions' | 'savePersonalization' | 'saveAiSettings'
     | 'resetPersonalization' | 'saveStatusBarStocks' | 'openResearchUrl' | 'setDirty' | 'changeFundComparisonRange'
     | 'selectFundOverviewFund' | 'changeFundOverviewRange' | 'changeFundTrendRange' | 'changeStockChartMode' | 'changeStockKlinePeriod'
-    | 'openLeekExternal' | 'refreshLeekWatchlist' | 'openLeekWatchlistDetails' | 'loadLeekStockDetails';
+    | 'openLeekExternal' | 'refreshLeekWatchlist' | 'openLeekWatchlistDetails' | 'loadLeekStockDetails' | 'deleteAiKey'
+    | 'requestAiKey';
   requestId: string;
   payload: unknown;
 };

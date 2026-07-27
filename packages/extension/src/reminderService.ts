@@ -1,5 +1,5 @@
 import { Disposable, Memento, window } from 'vscode';
-import { evaluateStockReminders, StockQuote } from '@stock-fund/domain';
+import { evaluateStockReminders, StockQuote } from '@tickerdock/domain';
 import { ConfigRepository } from './configRepository';
 import { ReminderStateRepository } from './reminderState';
 
@@ -93,7 +93,7 @@ export class ReminderService implements Disposable {
     };
     this.writeChain = this.writeChain
       .then(() => this.state.save(snapshot))
-      .catch((error) => console.error('[stock-fund] Reminder state persistence failed', error));
+      .catch((error) => console.error('[tickerdock] Reminder state persistence failed', error));
     return this.writeChain;
   }
 }

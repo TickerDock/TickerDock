@@ -1,21 +1,28 @@
 {
-  "name": "stock-fund-workspace",
+  "name": "tickerdock-workspace",
   "private": true,
   "version": "0.1.0",
   "packageManager": "pnpm@11.6.0",
   "scripts": {
     "clean": "pnpm --recursive run clean",
-    "build": "pnpm --filter @stock-fund/domain build && pnpm --filter @stock-fund/data-sources build && pnpm --filter stock-fund build",
-    "typecheck": "pnpm --filter @stock-fund/webview-ui typecheck && tsc -b --pretty false",
+    "build": "pnpm --filter @tickerdock/domain build && pnpm --filter @tickerdock/data-sources build && pnpm --filter tickerdock build",
+    "typecheck": "pnpm --filter @tickerdock/webview-ui typecheck && tsc -b --pretty false",
     "test": "pnpm -r test",
-    "check": "pnpm typecheck && pnpm test && pnpm build",
-    "test:integration": "pnpm --filter stock-fund test:integration",
-    "package:vsix": "pnpm --filter stock-fund package:vsix",
+    "lint": "eslint \"packages/**/*.{ts,tsx}\"",
+    "coverage": "pnpm -r --if-present coverage",
+    "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build",
+    "test:integration": "pnpm --filter tickerdock test:integration",
+    "package:vsix": "pnpm --filter tickerdock package:vsix",
     "release:check": "pnpm check && pnpm test:integration && pnpm package:vsix"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/node": "^22.15.0",
+    "@vitest/coverage-v8": "^3.2.7",
+    "eslint": "^10.7.0",
+    "globals": "^17.7.0",
     "typescript": "^5.8.3",
+    "typescript-eslint": "^8.65.0",
     "vitest": "^3.2.4"
   }
 }

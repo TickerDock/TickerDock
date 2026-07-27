@@ -6,6 +6,7 @@ export default defineConfig({
   plugins: [react()],
   build: {
     target: 'chrome114',
+    chunkSizeWarningLimit: 650,
     outDir: '../extension/dist/webview-ui',
     emptyOutDir: true,
     rollupOptions: {
@@ -15,5 +16,13 @@ export default defineConfig({
       },
     },
   },
-  test: { environment: 'jsdom' },
+  test: {
+    environment: 'jsdom',
+    coverage: {
+      provider: 'v8',
+      include: ['src/**/*.{ts,tsx}'],
+      reporter: ['text', 'json-summary'],
+      thresholds: { statements: 75, branches: 60, functions: 60, lines: 75 },
+    },
+  },
 });

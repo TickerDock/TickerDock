@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen, within } from '@testing-library/react';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom/vitest';
 import { App } from '../src/App';
@@ -51,6 +51,38 @@ describe('webview UI', () => {
     });
   });
 
+  it('adds and saves a new stock position with an unchecked sold-out state', async () => {
+    render(<App bootstrap={{
+      page: 'stockPositions',
+      items: [{ code: 'sh600000', name: '娴﹀彂閾惰' }],
+      positions: [],
+    }} />);
+    await userEvent.type(screen.getAllByRole('spinbutton')[0]!, '200');
+    await userEvent.type(screen.getAllByRole('spinbutton')[1]!, '10');
+    const save = screen.getByRole('button', { name: '保存' });
+    expect(save).toBeEnabled();
+    await userEvent.click(save);
+    expect(vi.mocked(postMessage)).toHaveBeenCalledWith('saveStockPositions', {
+      positions: [{ code: 'sh600000', quantity: 200, costPrice: 10, soldOut: false }],
+    });
+  });
+
+  it('adds and saves a new fund position', async () => {
+    render(<App bootstrap={{
+      page: 'fundPositions',
+      items: [{ code: '110022', name: '鏄撴柟杈炬秷璐?' }],
+      positions: [],
+    }} />);
+    await userEvent.type(screen.getAllByRole('spinbutton')[0]!, '1000');
+    await userEvent.type(screen.getAllByRole('spinbutton')[1]!, '1.5');
+    const save = screen.getByRole('button', { name: '保存' });
+    expect(save).toBeEnabled();
+    await userEvent.click(save);
+    expect(vi.mocked(postMessage)).toHaveBeenCalledWith('saveFundPositions', {
+      positions: [{ code: '110022', shares: 1000, costNav: 1.5 }],
+    });
+  });
+
   it('clears a fund position without removing the asset row', async () => {
     render(<App bootstrap={{
       page: 'fundPositions',
@@ -73,6 +105,37 @@ describe('webview UI', () => {
     });
   });
 
+  it('renders and saves the standalone AI settings page', async () => {
+    render(<App bootstrap={{ page: 'aiSettings', state: {
+      baseUrl: 'https://api.openai.com/v1', model: 'gpt-5.6', apiMode: 'responses', historyRange: '6m', hasApiKey: true,
+    } }} />);
+    await userEvent.clear(screen.getByLabelText('模型'));
+    await userEvent.type(screen.getByLabelText('模型'), 'gpt-5');
+    await userEvent.selectOptions(screen.getByLabelText('历史数据范围'), '3m');
+    await userEvent.click(screen.getByRole('button', { name: /^保存$/ }));
+    expect(vi.mocked(postMessage)).toHaveBeenCalledWith('saveAiSettings', { value: {
+      baseUrl: 'https://api.openai.com/v1', model: 'gpt-5', apiMode: 'responses', historyRange: '3m', hasApiKey: true, apiKey: '',
+    } });
+  });
+
+  it('reveals and hides the stored AI key on demand', async () => {
+    render(<App bootstrap={{ page: 'aiSettings', state: {
+      baseUrl: 'https://api.openai.com/v1', model: 'gpt-5.6', apiMode: 'responses', historyRange: '6m', hasApiKey: true,
+    } }} />);
+    const keyInput = screen.getByLabelText('API 密钥');
+    expect(keyInput).toHaveAttribute('type', 'password');
+    expect(keyInput).toHaveAttribute('placeholder', '••••••••••••••••');
+    await userEvent.click(screen.getByRole('button', { name: '显示 API 密钥' }));
+    expect(vi.mocked(postMessage)).toHaveBeenCalledWith('requestAiKey', {});
+    window.dispatchEvent(new MessageEvent('message', { data: {
+      version: 1, type: 'aiKeyLoaded', payload: { apiKey: 'sk-secret' }, requestId: 'test',
+    } }));
+    await waitFor(() => expect(keyInput).toHaveAttribute('type', 'text'));
+    expect(keyInput).toHaveValue('sk-secret');
+    await userEvent.click(screen.getByRole('button', { name: '隐藏 API 密钥' }));
+    expect(keyInput).toHaveAttribute('type', 'password');
+  });
+
   it('saves status bar stock selection separately', async () => {
     const state = personalizationState();
     render(<App bootstrap={{ page: 'personalization', state, defaults: state }} />);
@@ -90,6 +153,7 @@ describe('webview UI', () => {
       id: 'article-1', title: '研报标题', summary: '研报摘要', time: '2026-07-21', source: 'jiuyangongshe',
       url: 'https://www.jiuyangongshe.com/a/article-1',
     }] }} />);
+    expect(screen.getByRole('heading', { level: 1, name: '浦发银行' })).toBeInTheDocument();
     expect(screen.getByText('研报标题')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: /打开原文/ }));
     expect(vi.mocked(postMessage)).toHaveBeenCalledWith('openResearchUrl', { url: 'https://www.jiuyangongshe.com/a/article-1' });

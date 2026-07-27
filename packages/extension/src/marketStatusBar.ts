@@ -1,5 +1,5 @@
 import { Disposable, StatusBarAlignment, StatusBarItem, window } from 'vscode';
-import { StockQuote } from '@stock-fund/domain';
+import { StockQuote } from '@tickerdock/domain';
 import { normalizeStatusBarCodes } from './statusBarModel';
 import {
   changeIcon,
@@ -85,7 +85,7 @@ export class MarketStatusBar implements Disposable {
     item.tooltip = formatStockQuoteTooltip(quote);
     item.command = {
       title: '查看股票K线',
-      command: 'stock-fund.viewStockHistoryByCode',
+      command: 'tickerdock.viewStockHistoryByCode',
       arguments: [quote.code, quote.name],
     };
     item.show();
