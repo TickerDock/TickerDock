@@ -1,224 +1,173 @@
 # TickerDock
 
-面向中文用户的 VS Code 行情侧边栏，支持股票、基金、期货、外汇和 Binance 行情及持仓管理。
+TickerDock 是面向中文用户的 VS Code 行情侧边栏，支持股票、基金、期货、外汇和 Binance 行情，并提供自选分组、持仓收益、状态栏行情、提醒和本地数据分析工具。
 
-## Workspace
+> 行情、分析结果和参考价位仅供信息展示，不构成投资建议。
 
-- `packages/domain`: source-independent market models and gateway contracts.
-- `packages/data-sources`: adapters for `stock-api` and `fund-api`.
-- `packages/extension`: VS Code activation, commands, refresh scheduling, and TreeViews.
+## 主要功能
 
-The current beta supports A/HK/US stocks, domestic and overseas futures, fund
-NAV plus intraday estimates, grouped watchlists, portfolio P/L, status bars,
-and threshold reminders.
+- A 股、港股、美股、国内期货和国际期货行情。
+- 基金净值、盘中估值、历史净值、基金排行、持仓和资金流向。
+- Binance 现货行情与 TradingView 详情页。
+- 中国银行外汇牌价，以及港币、美元持仓的人民币汇总。
+- 股票和基金自选分组、排序、置顶及批量持仓管理。
+- 股票、基金持仓市值、累计收益和当日收益状态栏。
+- 最多 8 个自选股票行情状态栏，点击可打开走势页面。
+- 股票价格和涨跌幅阈值提醒。
+- 股票 K 线、基金走势、基金对比和基金趋势总览。
+- 牛熊风向标，包括市场涨跌分布、热门主题和资金流向。
+- 股票扩展详情，包括均线、支撑压力、止盈止损参考、研报和问财诊断。
+- 韭菜中心，用于访问固定、受限的数据页面和自选详情。
+- OpenAI Responses API 与 Chat Completions 兼容的 AI 研究功能。
+- 金十和选股宝快讯控制台。
 
-Stock and fund view toolbars include batch position managers. They edit all
-watched positions plus stale configured positions in one local Webview, validate
-every saved row in the extension host, and replace the corresponding position
-configuration atomically before refreshing portfolio results.
+## 快速开始
 
-Held stocks use VS Code's native label highlighting and an explicit `Holding`
-marker without custom colors. Toggle this with `TickerDock: Toggle Held-Stock
-Highlight`; the setting falls back to legacy `stockHeldTipShow` values.
+### 安装 VSIX
 
-The Stock view supports the same custom-group workflow as funds: create,
-rename, and remove groups, then add or reorder stocks inside the selected
-group. Legacy flat `stocks` settings migrate into a `My Stocks` group and stay
-synchronized for backward compatibility.
-
-Adding a stock, fund, or Binance pair uses one live-search picker. Results are
-updated while typing with debounced requests and stale-result protection.
-
-The extension also includes configurable Binance and Bank of China forex
-TreeViews, display sorting, persistent watchlist reordering, stock K-line
-charts, and fund NAV history charts.
-
-Native host-side integrations now also provide a combined Jin10 and XuanGuBao
-flash-news feed, fund top holdings, a daily fund return ranking, and
-industry/concept/region net inflow views without loading remote scripts or
-third-party pages inside Webviews.
-
-Fund context menus also open a reusable extended-detail view backed by
-structured EastMoney requests. It combines fund metadata, period returns,
-profit probabilities, diagnostic scores, institution ratings, similar-fund
-performance, and top holdings; individual source failures do not discard the
-remaining sections.
-
-Leek Center provides a single responsive navigation surface for the remaining
-EastMoney data pages and the capital-flow dashboard. Embedded origins are
-declared in a strict CSP allowlist. Stock Wind Vane uses a loopback-only,
-fixed-target EastMoney proxy so it can run inside a VS Code Webview without
-exposing a general-purpose forwarding endpoint.
-
-The Stock view also includes a native Bull/Bear Market Compass. The extension
-host fetches and normalizes A-share breadth, nine price-distribution buckets,
-hot themes, and Stock Connect net-inflow points; a script-disabled Webview
-renders the dashboard locally. Placeholder and all-zero Stock Connect rows are
-reported as unavailable rather than presented as real flow data.
-
-Opt-in Xueqiu timelines are available in a dedicated TreeView. The authenticated
-Cookie is stored only in VS Code SecretStorage, and timeline HTML is reduced to
-static text before it reaches a Webview.
-
-AI research commands support the OpenAI Responses API and Chat Completions
-compatible gateways. API keys are stored only in SecretStorage. Use `TickerDock:
-Configure AI`, `TickerDock: Ask AI`, or the `Analyze Stock with AI` stock context
-command; stock analysis combines normalized K-lines with a bounded snapshot of
-the currently enabled flash-news sources. AI output is rendered in a
-script-disabled Webview.
-
-AI stock analysis supports persisted `1w`, `1m`, `3m`, `6m`, and `1y` daily
-K-line ranges. Use `TickerDock: Configure AI Stock History Range`; compatible
-legacy `aiStockHistoryRange` values are read automatically.
-
-Stock context menus can open a local, script-disabled Jiuyangongshe research
-view. The same bounded stock-specific excerpts can enrich AI analysis, while
-research-provider failures remain isolated from K-lines and flash news.
-
-The Settings sidebar keeps direct entries for Leek Center, AI assistant
-configuration, and extension personalization settings.
-
-Personalization opens a dedicated local editor for standard or template-based
-stock and fund labels, market status-bar templates, change icon style, optional
-rise/fall colors, K-line defaults, held-position highlighting, reminders,
-market-hours refresh, and status-bar visibility. Templates accept only bounded,
-allowlisted placeholders and legacy `padLeft`/`padRight` operations. Legacy
-`labelFormat`, `iconType`, `riseColor`, and `fallColor` settings are mapped
-without injecting CSS into the VS Code workbench.
-The original `arrow`, `arrow1`, `food1`, `food2`, `food3`, `iconfood`, and `none`
-icon choices retain their original SVG or Emoji mappings, including the 2%
-single/double-arrow threshold.
-
-Successful general and stock AI responses are also appended to the `TickerDock
-AI Research` Output Channel with timestamps and bounded titles. Use `TickerDock:
-Show AI Research Output` or `TickerDock: Clear AI Research Output`. API keys,
-request headers, and raw stock-analysis inputs are never written there.
-
-## Commands
+构建扩展包：
 
 ```bash
 pnpm install
+pnpm package:vsix
+```
+
+随后在 VS Code 中执行“扩展：从 VSIX 安装”，选择项目根目录生成的 `tickerdock.vsix`。
+
+### 开发调试
+
+使用 VS Code 打开项目，在“运行和调试”中执行 `Run TickerDock Extension`，即可启动扩展开发宿主。
+
+常用命令：
+
+```bash
+pnpm install
+pnpm typecheck
+pnpm lint
+pnpm test
+pnpm build
 pnpm check
 pnpm test:integration
 pnpm package:vsix
 ```
 
-`pnpm test:integration` launches the extension in the VS Code 1.85.2 baseline
-host and verifies activation, contributed-command registration, and a live
-configuration reload. `pnpm package:vsix` writes the Marketplace package to
-`tickerdock.vsix`; `pnpm release:check` runs unit checks, integration tests, and
-packaging together.
+`pnpm release:check` 会依次执行检查、集成测试和 VSIX 打包。
 
-Pushing a version tag such as `v0.1.0` runs the release workflow, verifies that
-the tag matches the extension version, publishes `tickerdock.vsix` to the VS
-Code Marketplace, and creates a GitHub Release. The repository must define a
-`VSCE_PAT` Actions secret with Marketplace publish permission.
-Version `0.1.0` is published as a Marketplace pre-release and a GitHub
-pre-release; remove the corresponding flags from the release workflow when the
-extension is ready for its first stable release.
+## 使用说明
 
-The extension uses `tickerdock.*` settings and falls back to existing
-`leek-fund.*` values until a new value is explicitly configured. Legacy codes
-are translated only at the data-source boundary, so users do not need to
-recreate their watchlists.
+### 自选与分组
 
-Open this directory in VS Code and run `Run TickerDock Extension` from the
-Run and Debug view to launch an Extension Development Host. See
-`docs/MIGRATION.md` for the completed scope and the next migration slices.
+Stock 和 Fund 视图支持创建、重命名和删除分组。可以在分组中搜索并添加标的，也可以通过右键菜单置顶、上移、下移或删除。
 
-Xueqiu requires a Cookie copied from an authenticated browser session. Configure
-it with `Configure Xueqiu Cookie`; it is never copied automatically from a
-browser or written to normal VS Code settings.
+旧版扁平 `stocks`、`funds` 配置会迁移到默认分组，并继续保持兼容。
 
-`TickerDock: Export Settings` writes a versioned JSON backup containing only
-supported non-secret settings. `TickerDock: Import Settings` also accepts legacy
-flat `leek-fund.*` exports, validates every supported value, excludes legacy
-Cookie/API-key fields, and creates a rollback backup before changing settings.
+### 持仓与状态栏
 
-The status bar can show portfolio profit summaries and up to four selected
-market quotes. Configure quote items from the Stock view title or stock context
-menu. Visibility and direction icons can be toggled independently from the
-command palette; clicking a quote opens its stock trend page.
+股票和基金工具栏均提供批量持仓管理器。持仓数据保存在 VS Code 配置中，收益计算在扩展宿主本地完成。
 
-Stock trend pages route fixed EastMoney destinations through the same
-loopback-only service so Shanghai and Shenzhen individual stocks can switch
-between the standard chart and chip distribution without an embedded-page
-verification prompt. Index, Hong Kong, and US codes use the fixed standard
-page, while futures use a fixed Sina quote page. The host constructs every
-destination from validated internal codes; arbitrary targets are not accepted.
-The legacy numeric `stockKLineChartSwitch` value maps to the persisted
-`tickerdock.stockChartMode` setting.
+底部状态栏随插件启动，并可独立控制：
 
-Fund NAV ranges from one month through all history remain locally rendered.
-Clicking a Binance pair opens the original embedded TradingView spot chart for
-the fixed `BINANCE:<pair>` symbol. The host validates the pair and constructs the
-iframe destination using TradingView's current hash-based widget options;
-arbitrary URLs are never accepted.
-Stock, fund, and Binance default detail clicks each reuse one type-specific
-editor tab. Selecting another item updates and reveals that tab instead of
-opening an additional editor.
+- 股票持仓收益；
+- 基金持仓收益；
+- 自选股票行情；
+- 涨跌方向图标和自定义颜色。
 
-Stock extended details are available from a stock item context menu or the
-`TickerDock: View Extended Stock Details` command. The page combines the live
-quote, 20-day and 60-day averages, recent support and resistance, derived
-take-profit and stop-loss reference levels, and related Jiuyangongshe research.
-The levels are calculated from local K-lines and are not investment advice.
-For A-share stocks, the page also restores the legacy iWencai browser-token
-flow and displays the official diagnosis, score, short/mid/long views,
-concepts, community heat, support/resistance and take-profit/stop-loss fields,
-and institution reports when returned by the provider. The browser generates
-only the short-lived `hexin-v` token; the extension host accepts no remote URL
-or arbitrary request options from the Webview.
+港股和美股持仓使用中国银行现汇卖出价换算为人民币。汇率不可用时，对应币种不会计入人民币合计，并会显示明确提示。
 
-Portfolio summaries normalize Hong Kong dollar and US dollar positions to CNY
-using Bank of China spot selling rates, which are quoted per 100 foreign-currency
-units. Individual TreeView positions remain in their native currency. A missing
-rate excludes that currency from the CNY total and produces an explicit warning.
-Stock and fund portfolio summaries have independent status-bar visibility
-commands, while the combined portfolio command still toggles both together.
-Visible portfolio status items remain available as clickable placeholders when
-no positions are configured, opening the corresponding position manager. The
-legacy `showEarnings` setting controls portfolio visibility; the unrelated
-`hideFundBarItem` market-quote icon setting is no longer mapped to it.
-When the legacy extension is not installed, compatible legacy command IDs for
-refresh, sorting, settings, AI, and status-bar actions forward to the new
-implementation so existing keyboard shortcuts continue to work.
+### 快讯控制台
 
-Reminder quote snapshots and cooldown timestamps are persisted in VS Code global
-state. Writes are coalesced during normal refreshes and committed immediately
-when a reminder fires, preventing duplicate threshold notifications after a
-restart. Invalid or older-than-seven-day state is discarded.
-Use `TickerDock: Toggle Stock Reminders` to suspend or resume notifications
-without removing configured thresholds.
+Flash News 不占用独立侧边栏。点击 Stock 视图标题栏中的“显示快讯输出”可打开快讯控制台。
 
-Automatic stock and fund refreshes are market-session aware. A-share, Hong Kong,
-US, domestic-futures, and global-futures codes are filtered independently using
-their local IANA time zones; US daylight saving time is handled automatically.
-Known 2026 exchange holidays are included, with weekday/session fallback for
-other years. Initial, manual, and configuration-triggered refreshes always run.
-Use `TickerDock: Toggle Market-Hours Scheduling` to restore unrestricted polling.
+- 控制台打开后才开始轮询；
+- 控制台关闭后立即停止后续轮询；
+- 正在返回的请求在控制台关闭后会被丢弃；
+- 页面最多保留最近 300 条记录，避免长时间打开造成内存持续增长；
+- 可通过 `tickerdock.newsSources` 分别启用金十或选股宝。
 
-The Fund view can compare two to six watched funds over 1-month, 3-month,
-6-month, 1-year, or full-history ranges. Each NAV series is normalized to period
-return and rendered locally; one failed fund does not discard the other series.
-The Fund Trends Overview restores the legacy all-fund browser with a searchable
-watchlist, current confirmed/estimated NAV summaries, lazy cached history, and
-local 1-month through full-history charts. It reuses one editor tab and does not
-load legacy remote chart images.
-Fund trend, comparison, and market-compass charts use a modular ECharts SVG
-runtime bundled locally with the extension. Tooltips, zooming, resizing, and
-VS Code theme colors are available without loading scripts or data from a CDN.
-Leek Center also includes fixed Stock Connect and main-capital-flow pages, with
-direct Fund-view commands and the same sandboxed HTTPS frame allowlist.
+### 股票提醒
 
-Stock, fund, and Binance change sorting persists across restarts using explicit
-`original`, `ascending`, and `descending` modes. Legacy numeric sort settings are
-mapped automatically. Funds can also be sorted by ascending or descending
-position market value, including legacy `fundSort` values `2` and `-2`. Binance
-pairs also support persistent top/up/down ordering.
+可以为股票设置价格或涨跌幅向上、向下穿越提醒。提醒快照和冷却时间保存在 VS Code 全局状态中，仅跟踪真正配置了规则的股票。
 
-Flash-news sources can be selected independently with `tickerdock.newsSources`.
-The optional `TickerDock Flash News` Output Channel records only newly received
-items and exposes an unread status item; important-item notifications are a
-separate opt-in setting. Initial polling establishes a per-source baseline so
-enabling a provider does not report its historical backlog as unread.
+使用 `TickerDock: Toggle Stock Reminders` 可以暂停或恢复提醒，而不删除已有规则。
+
+### AI 研究
+
+使用以下命令配置和调用 AI：
+
+- `TickerDock: Configure AI`
+- `TickerDock: Ask AI`
+- `TickerDock: Analyze Stock with AI`
+- `TickerDock: Configure AI Stock History Range`
+
+API Key 仅保存在 VS Code SecretStorage 中。支持 `1w`、`1m`、`3m`、`6m` 和 `1y` 股票历史范围。AI 输出通道在首次使用时才创建，不会随扩展启动占用额外资源。
+
+## 性能策略
+
+TickerDock 会随 VS Code 启动，以便及时创建底部状态栏，但后台任务会根据实际需求调度：
+
+- 前台行情默认每 15 秒刷新；
+- 股票视图隐藏后，状态栏和提醒所需刷新最低间隔为 60 秒；
+- 隐藏时只请求状态栏、持仓和提醒依赖的股票，不请求整个自选列表；
+- 基金视图隐藏且没有基金持仓时停止基金刷新；
+- 隐藏基金视图只估值持仓基金，估值请求最大并发数为 4；
+- Binance 仅在对应视图可见时轮询；
+- 外汇仅在视图可见或外币持仓需要换算时刷新；
+- 非交易时段暂停自动股票和基金请求；
+- 韭菜中心隐藏后释放 React 页面和外部 iframe，仅保留轻量恢复状态。
+
+可使用 `TickerDock: Toggle Market-Hours Scheduling` 切换交易时段限制。
+
+## 常用配置
+
+| 配置项 | 说明 | 默认值 |
+| --- | --- | --- |
+| `tickerdock.interval` | 股票、基金前台刷新间隔（毫秒） | `15000` |
+| `tickerdock.marketHoursEnabled` | 仅在对应市场交易时段自动刷新 | `true` |
+| `tickerdock.binanceInterval` | Binance 刷新间隔 | `10000` |
+| `tickerdock.forexInterval` | 外汇刷新间隔 | `3600000` |
+| `tickerdock.newsInterval` | 快讯控制台刷新间隔 | `15000` |
+| `tickerdock.newsSources` | 启用的快讯来源 | `jin10`、`xuangubao` |
+| `tickerdock.remindersEnabled` | 启用股票提醒 | `true` |
+| `tickerdock.showMarketStatusBar` | 显示行情状态栏 | `true` |
+| `tickerdock.showStockPortfolioStatusBar` | 显示股票收益状态栏 | `true` |
+| `tickerdock.showFundPortfolioStatusBar` | 显示基金收益状态栏 | `true` |
+
+扩展使用 `tickerdock.*` 配置，并在用户尚未显式设置新值时兼容读取 `leek-fund.*` 配置。
+
+## 设置导入导出
+
+- `TickerDock: Export Settings` 导出带版本号的 JSON 配置备份。
+- `TickerDock: Import Settings` 可导入当前配置或旧版 `leek-fund.*` 扁平配置。
+- 导入前会校验支持的字段并创建回滚备份。
+- Cookie、API Key 等密钥不会包含在普通设置备份中。
+
+## 数据与安全
+
+- API Key 和雪球 Cookie 只写入 VS Code SecretStorage。
+- Webview 使用固定页面类型、严格 CSP 和受限来源。
+- 股票、基金图表在本地渲染，不从 CDN 加载运行脚本。
+- 东方财富代理仅监听回环地址，并只允许固定目标，不接受任意转发 URL。
+- 浏览器生成的问财 `hexin-v` 只用于当前固定请求流程。
+- 日志不会记录 API Key、认证请求头或完整 AI 原始输入。
+
+## 项目结构
+
+```text
+packages/domain        与数据源无关的领域模型和网关接口
+packages/data-sources  stock-api、fund-api、stock-sdk 等数据适配器
+packages/extension     VS Code 激活、命令、调度、状态栏和 TreeView
+packages/webview-ui    本地 React Webview 页面与图表
+docs                   迁移和设计文档
+```
+
+迁移范围和后续工作参见 [docs/MIGRATION.md](docs/MIGRATION.md)。
+
+## 兼容性
+
+- VS Code `1.85.0` 及以上版本。
+- 旧版行情代码只在数据源边界转换，用户无需重新创建自选列表。
+- 旧版刷新、排序、设置、AI 和状态栏命令 ID 会转发到当前实现，现有快捷键可以继续使用。
+
+## 许可证
+
+本项目使用 [MIT License](LICENSE)。
