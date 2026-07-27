@@ -60,7 +60,7 @@ function PositionRow({ kind, item, value, update, clear }: {
   const stock = value as StockPosition | undefined;
   const fund = value as FundPosition | undefined;
   return <tr><td className="asset"><strong>{item.name}</strong><small>{item.code}</small></td>
-    {kind === 'stock' ? <><td>{input('quantity', stock?.quantity)}</td><td>{input('costPrice', stock?.costPrice)}</td><td>{input('todayTradePrice', stock?.todayTradePrice)}</td><td><input type="checkbox" checked={Boolean(stock?.soldOut)} aria-label={`${item.name} 已清仓`} onChange={(event) => update(item.code, { soldOut: event.target.checked })} /></td></> : <><td>{input('shares', fund?.shares)}</td><td>{input('costNav', fund?.costNav)}</td></>}
+    {kind === 'stock' ? <><td>{input('quantity', stock?.quantity)}</td><td>{input('costPrice', stock?.costPrice)}</td><td>{input('todayTradePrice', stock?.todayTradePrice)}</td><td><input type="checkbox" checked={Boolean(stock?.soldOut)} aria-label={`${item.name} 已清仓`} onChange={(event) => update(item.code, { soldOut: event.target.checked, soldOutDate: undefined })} /></td></> : <><td>{input('shares', fund?.shares)}</td><td>{input('costNav', fund?.costNav)}</td></>}
     <td><button className="icon-button" type="button" title="清空持仓" aria-label={`清空 ${item.name} 持仓`} onClick={clear}><i className="codicon codicon-clear-all" aria-hidden="true" /></button></td>
   </tr>;
 }

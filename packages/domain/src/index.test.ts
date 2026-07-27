@@ -48,9 +48,25 @@ describe('portfolio calculations', () => {
 
   it('uses the exit price for a sold-out position', () => {
     const profit = calculateStockProfit(stockQuote, {
-      code: stockQuote.code, quantity: 10, costPrice: 80, todayTradePrice: 105, soldOut: true,
-    });
+      code: stockQuote.code, quantity: 10, costPrice: 80, todayTradePrice: 105,
+      soldOut: true, soldOutDate: '2026-07-27',
+    }, '2026-07-27');
     expect(profit).toMatchObject({ marketValue: 0, totalProfit: 250, todayProfit: 50, realized: true });
+  });
+
+  it('excludes a stock position after its sold-out date', () => {
+    const position = {
+      code: stockQuote.code, quantity: 10, costPrice: 80, todayTradePrice: 105,
+      soldOut: true, soldOutDate: '2026-07-26',
+    };
+
+    expect(calculateStockProfit(stockQuote, position, '2026-07-27')).toBeUndefined();
+  });
+
+  it('excludes legacy sold-out positions without a date', () => {
+    expect(calculateStockProfit(stockQuote, {
+      code: stockQuote.code, quantity: 10, costPrice: 80, todayTradePrice: 105, soldOut: true,
+    }, '2026-07-27')).toBeUndefined();
   });
 
   it('calculates fund profit from confirmed NAV', () => {

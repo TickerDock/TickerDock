@@ -4,11 +4,12 @@ import { parseFundPositions, parseStockPositions } from '../src/positionConfig';
 describe('legacy position configuration', () => {
   it('maps legacy stockPrice fields', () => {
     const positions = parseStockPositions({
-      sh600519: { amount: 10, unitPrice: 1200, todayUnitPrice: 1250, isSellOut: true },
+      sh600519: { amount: 10, unitPrice: 1200, todayUnitPrice: 1250, isSellOut: true, sellOutDate: '2026-07-26' },
       invalid: { amount: 0, unitPrice: 1 },
     });
     expect(positions.get('sh600519')).toEqual({
-      code: 'sh600519', quantity: 10, costPrice: 1200, todayTradePrice: 1250, soldOut: true,
+      code: 'sh600519', quantity: 10, costPrice: 1200, todayTradePrice: 1250,
+      soldOut: true, soldOutDate: '2026-07-26',
     });
     expect(positions.has('invalid')).toBe(false);
   });
@@ -18,6 +19,14 @@ describe('legacy position configuration', () => {
       '110022': { amount: 1500, shares: 900, unitPrice: 1.5 },
     });
     expect(positions.get('110022')).toEqual({ code: '110022', shares: 900, costNav: 1.5 });
+  });
+
+  it('expires legacy sold-out stock positions that do not have a date', () => {
+    const positions = parseStockPositions({
+      sh600519: { amount: 10, unitPrice: 1200, todayUnitPrice: 1250, isSellOut: true },
+    });
+
+    expect(positions.get('sh600519')?.soldOutDate).toBe('1970-01-01');
   });
 
   it('derives fund shares from legacy amount and cost NAV', () => {

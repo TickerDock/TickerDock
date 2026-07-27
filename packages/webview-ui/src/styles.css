@@ -646,6 +646,8 @@ input[type="checkbox"] {
 .binance-frame-page, .binance-frame-page iframe { width: 100%; height: 100vh; margin: 0; }
 .binance-frame-page { overflow: hidden; }
 .binance-frame-page iframe { display: block; border: 0; }
+/* Only Eastmoney stock and sector detail pages need dark-theme inversion. */
+body.vscode-dark .eastmoney-detail-frame iframe { filter: invert(1) hue-rotate(180deg); }
 .ai-result-page { max-width: 900px; margin: 0 auto; padding: 20px; }
 .ai-result-page h1 { margin: 0 0 18px; font-size: 20px; }
 .ai-result-content { line-height: 1.7; overflow-wrap: anywhere; }

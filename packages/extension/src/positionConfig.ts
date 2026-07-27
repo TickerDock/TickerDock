@@ -15,6 +15,7 @@ export function parseStockPositions(value: unknown): Map<string, StockPosition> 
       costPrice,
       todayTradePrice: positiveNumber(item.todayUnitPrice),
       soldOut: item.isSellOut === true,
+      soldOutDate: item.isSellOut === true ? dateString(item.sellOutDate) || '1970-01-01' : undefined,
     });
   }
   return positions;
@@ -43,4 +44,8 @@ export function asRecord(value: unknown): UnknownRecord {
 function positiveNumber(value: unknown): number | undefined {
   const parsed = typeof value === 'number' ? value : Number(value);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
+}
+
+function dateString(value: unknown): string | undefined {
+  return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : undefined;
 }

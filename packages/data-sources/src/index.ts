@@ -726,7 +726,7 @@ export class EastMoneyMarketSentimentGateway implements MarketSentimentGateway {
   async getSnapshot(): Promise<MarketSentimentSnapshot> {
     const results = await Promise.allSettled([
       this.getJson('https://emdatah5.eastmoney.com/dc/NXFXB/GetUpDownData?type=0'),
-      this.getJson('https://emdatah5.eastmoney.com/dc/NXFXB/GetHotTheme'),
+      this.getJson('https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=10&po=1&np=1&fltt=2&invt=2&fid=f3&fs=m:90+t:3&fields=f12,f14,f3,f128,f140,f136'),
       this.getJson('https://push2.eastmoney.com/api/qt/kamtbs.rtmin/get?fields1=f1,f3&fields2=f51,f54,f52,f53,f58,f56,f57,f62,f60,f61'),
     ]);
     return {
@@ -737,8 +737,14 @@ export class EastMoneyMarketSentimentGateway implements MarketSentimentGateway {
   }
 
   private async getJson(url: string): Promise<unknown> {
-    const response = await this.request(url, {
-      headers: { Referer: 'https://data.eastmoney.com/' },
+    const requestUrl = new URL(url);
+    requestUrl.searchParams.set('_', String(Date.now()));
+    const response = await this.request(requestUrl, {
+      headers: {
+        Accept: 'application/json, text/plain, */*',
+        Referer: 'https://data.eastmoney.com/',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124 Safari/537.36',
+      },
       signal: AbortSignal.timeout(10000),
     });
     if (!response.ok) throw new Error(`EastMoney market sentiment request failed: ${response.status}`);
@@ -775,6 +781,28 @@ export function parseMarketBreadth(value: unknown): MarketBreadthSummary | undef
 }
 
 export function parseHotMarketThemes(value: unknown): HotMarketTheme[] {
+  const root = record(value);
+  const currentData = record(root?.data);
+  const currentRows = Array.isArray(currentData?.diff) ? currentData.diff : [];
+  if (currentRows.length > 0) {
+    return currentRows.flatMap((raw) => {
+      const item = record(raw);
+      if (!item) return [];
+      const name = string(item.f14);
+      const code = string(item.f12);
+      const leadingStockName = string(item.f128);
+      if (!name || !code || !leadingStockName) return [];
+      return [{
+        code,
+        name,
+        changeRatio: number(item.f3) / 100,
+        leadingStockCode: string(item.f140),
+        leadingStockName,
+        leadingStockChangeRatio: number(item.f136) / 100,
+      }];
+    }).slice(0, 10);
+  }
+
   const first = Array.isArray(value) ? record(value[0]) : undefined;
   const data = first && Array.isArray(first.Data) ? first.Data : [];
   return data.flatMap((raw) => {

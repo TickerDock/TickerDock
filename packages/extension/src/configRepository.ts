@@ -1,5 +1,5 @@
 import { ConfigurationTarget, workspace } from 'vscode';
-import { FundPosition, StockPosition, StockReminderRule } from '@tickerdock/domain';
+import { FundPosition, localDateString, StockPosition, StockReminderRule } from '@tickerdock/domain';
 import { asRecord, parseFundPositions, parseStockPositions } from './positionConfig';
 import { FundSortMode, legacyFundSortMode, legacySortMode, SortMode } from './sortModel';
 import { StockChartMode } from './stockIframePage';
@@ -129,6 +129,7 @@ export class ConfigRepository {
       unitPrice: position.costPrice,
       todayUnitPrice: position.todayTradePrice || 0,
       isSellOut: Boolean(position.soldOut),
+      sellOutDate: position.soldOut ? localDateString() : '',
     };
     await this.write('stockPrice', raw);
   }
@@ -139,6 +140,7 @@ export class ConfigRepository {
       unitPrice: position.costPrice,
       todayUnitPrice: position.todayTradePrice || 0,
       isSellOut: Boolean(position.soldOut),
+      sellOutDate: position.soldOut ? position.soldOutDate || localDateString() : '',
     }])));
   }
 

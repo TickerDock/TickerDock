@@ -3,6 +3,7 @@ import {
   BinanceGateway,
   EastMoneyFundEstimateGateway,
   EastMoneyFundInsightsGateway,
+  EastMoneyMarketSentimentGateway,
   FundApiGateway,
   Jin10FlashNewsGateway,
   IwenCaiStockInsightsGateway,
@@ -398,6 +399,37 @@ describe('EastMoney market sentiment normalization', () => {
       code: 'theme-1', name: 'Theme', changeRatio: 0.035,
       leadingStockCode: '600000', leadingStockName: 'Leader', leadingStockChangeRatio: 0.099,
     }]);
+  });
+
+  it('normalizes the current concept-board ranking response', () => {
+    expect(parseHotMarketThemes({ data: { diff: [{
+      f12: 'BK1675', f14: 'Historical High', f3: 17.36,
+      f140: '301234', f128: 'Leader', f136: 10,
+    }] } })).toEqual([{
+      code: 'BK1675', name: 'Historical High', changeRatio: 0.1736,
+      leadingStockCode: '301234', leadingStockName: 'Leader', leadingStockChangeRatio: 0.1,
+    }]);
+  });
+
+  it('requests the live concept-board ranking with cache busting', async () => {
+    const requested: string[] = [];
+    const request = async (input: string | URL | Request) => {
+      const url = String(input);
+      requested.push(url);
+      if (url.includes('/api/qt/clist/get')) {
+        return Response.json({ data: { diff: [{
+          f12: 'BK0001', f14: 'Live Theme', f3: 2,
+          f140: '600000', f128: 'Leader', f136: 5,
+        }] } });
+      }
+      return Response.json([]);
+    };
+
+    const snapshot = await new EastMoneyMarketSentimentGateway(request as typeof fetch).getSnapshot();
+
+    expect(snapshot.hotThemes[0]?.name).toBe('Live Theme');
+    expect(requested.some((url) => url.includes('/api/qt/clist/get'))).toBe(true);
+    expect(requested.every((url) => new URL(url).searchParams.has('_'))).toBe(true);
   });
 
   it('filters future placeholders and all-zero Stock Connect rows', () => {

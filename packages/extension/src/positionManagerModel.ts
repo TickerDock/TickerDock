@@ -1,4 +1,4 @@
-import { FundPosition, StockPosition } from '@tickerdock/domain';
+import { FundPosition, localDateString, StockPosition } from '@tickerdock/domain';
 import { readWebviewEnvelope } from './webviewProtocol';
 
 export interface PositionManagerItem {
@@ -28,7 +28,10 @@ export function parseStockPositionSaveMessage(
     const costPrice = requiredPositiveNumber(item.costPrice, `${code} cost price`);
     const todayTradePrice = optionalPositiveNumber(item.todayTradePrice, `${code} today trade price`);
     if (typeof item.soldOut !== 'boolean') throw new Error(`${code} sold-out state is invalid.`);
-    return { code, quantity, costPrice, todayTradePrice, soldOut: item.soldOut };
+    const soldOutDate = item.soldOut
+      ? optionalDateString(item.soldOutDate, `${code} sold-out date`) || localDateString()
+      : undefined;
+    return { code, quantity, costPrice, todayTradePrice, soldOut: item.soldOut, soldOutDate };
   });
 }
 
@@ -82,6 +85,14 @@ function requiredPositiveNumber(value: unknown, label: string): number {
 function optionalPositiveNumber(value: unknown, label: string): number | undefined {
   if (value === undefined || value === null || value === '') return undefined;
   return requiredPositiveNumber(value, label);
+}
+
+function optionalDateString(value: unknown, label: string): string | undefined {
+  if (value === undefined || value === null || value === '') return undefined;
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    throw new Error(`${label} is invalid.`);
+  }
+  return value;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

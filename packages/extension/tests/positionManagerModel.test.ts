@@ -17,7 +17,7 @@ describe('position manager model', () => {
   it('validates stock positions and permits an empty replacement', () => {
     const allowed = new Set(['sh600000']);
     expect(parseStockPositionSaveMessage(message('saveStockPositions', [{
-      code: 'sh600000', quantity: 100, costPrice: 10, todayTradePrice: 11, soldOut: false,
+      code: 'sh600000', quantity: 100, costPrice: 10, todayTradePrice: 11, soldOut: false, soldOutDate: '2026-07-26',
     }]), allowed)).toEqual([{
       code: 'sh600000', quantity: 100, costPrice: 10, todayTradePrice: 11, soldOut: false,
     }]);
@@ -25,6 +25,17 @@ describe('position manager model', () => {
     expect(() => parseStockPositionSaveMessage(message('saveStockPositions', [{
       code: 'unknown', quantity: 1, costPrice: 1, soldOut: false,
     }]), allowed)).toThrow('unknown code');
+  });
+
+  it('preserves the date of an existing sold-out position', () => {
+    const allowed = new Set(['sh600000']);
+    expect(parseStockPositionSaveMessage(message('saveStockPositions', [{
+      code: 'sh600000', quantity: 100, costPrice: 10, todayTradePrice: 11,
+      soldOut: true, soldOutDate: '2026-07-26',
+    }]), allowed)).toEqual([{
+      code: 'sh600000', quantity: 100, costPrice: 10, todayTradePrice: 11,
+      soldOut: true, soldOutDate: '2026-07-26',
+    }]);
   });
 
   it('rejects partial, duplicate, and non-positive fund positions', () => {

@@ -2,7 +2,7 @@ export const PROTOCOL_VERSION = 1 as const;
 
 export type PageKind = 'sectorManager' | 'stockPositions' | 'fundPositions' | 'personalization' | 'marketSentiment' | 'fundComparison' | 'fundOverview';
 export type Sector = { code: string; name: string };
-export type StockPosition = { code: string; quantity: number; costPrice: number; todayTradePrice?: number; soldOut: boolean };
+export type StockPosition = { code: string; quantity: number; costPrice: number; todayTradePrice?: number; soldOut: boolean; soldOutDate?: string };
 export type FundPosition = { code: string; shares: number; costNav: number };
 export type PositionItem = { code: string; name: string };
 export type ChangeIconStyle = 'arrow' | 'arrow1' | 'food1' | 'food2' | 'food3' | 'iconfood' | 'none';
