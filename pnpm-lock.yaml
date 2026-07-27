@@ -47,6 +47,9 @@ importers:
       stock-api:
         specifier: 2.7.3
         version: 2.7.3
+      stock-sdk:
+        specifier: 2.4.0
+        version: 2.4.0
 
   packages/domain: {}
 
@@ -2640,6 +2643,11 @@ packages:
   stock-api@2.7.3:
     resolution: {integrity: sha512-Glz7ofEqSViYPmspN6uR2dX9PGneK9V2a/8Tdv3tdMUr0CAm+G4bf4SDNoxgmkwCoGCZF0GV5c55X0Rqayw3pA==}
     engines: {node: '>=18'}
+    hasBin: true
+
+  stock-sdk@2.4.0:
+    resolution: {integrity: sha512-4pVdLKQ8x3iGYt9edasQoa4tT3/5xCK0EebLhuvFoVYyLYKP5Y8Eld/W3B0LZi2+LBgcOxeDUKd+jYxrOeCd5Q==}
+    engines: {node: '>=18.0.0'}
     hasBin: true
 
   string-width@4.2.3:
@@ -5827,6 +5835,8 @@ snapshots:
   stdin-discarder@0.2.2: {}
 
   stock-api@2.7.3: {}
+
+  stock-sdk@2.4.0: {}
 
   string-width@4.2.3:
     dependencies:

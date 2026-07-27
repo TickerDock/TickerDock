@@ -32,6 +32,26 @@ describe('RefreshController', () => {
     expect(task).not.toHaveBeenCalled();
   });
 
+  it('can stop and restart scheduled work without creating duplicate timers', async () => {
+    vi.useFakeTimers();
+    const task = vi.fn(async () => undefined);
+    const controller = new RefreshController(5000, task);
+
+    controller.start();
+    controller.start();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(task).toHaveBeenCalledTimes(1);
+
+    controller.stop();
+    await vi.advanceTimersByTimeAsync(10000);
+    expect(task).toHaveBeenCalledTimes(1);
+
+    controller.start();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(task).toHaveBeenCalledTimes(2);
+    controller.dispose();
+  });
+
   it('does not overlap manual refreshes', async () => {
     let release: (() => void) | undefined;
     const task = vi.fn(() => new Promise<void>((resolve) => { release = resolve; }));

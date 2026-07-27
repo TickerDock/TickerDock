@@ -19,6 +19,7 @@ const HOLIDAYS: Partial<Record<ScheduledMarket, ReadonlySet<string>>> = {
     '2026-06-19', '2026-07-03', '2026-09-07', '2026-11-26', '2026-12-25',
   ]),
 };
+const ZONED_FORMATTERS = new Map<string, Intl.DateTimeFormat>();
 
 export function marketForStockCode(code: string): ScheduledMarket | undefined {
   const normalized = code.toUpperCase();
@@ -82,11 +83,16 @@ interface ZonedParts {
 }
 
 function zonedParts(date: Date, timeZone: string): ZonedParts {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone,
-    year: 'numeric', month: '2-digit', day: '2-digit',
-    weekday: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
-  }).formatToParts(date);
+  let formatter = ZONED_FORMATTERS.get(timeZone);
+  if (!formatter) {
+    formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone,
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      weekday: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+    });
+    ZONED_FORMATTERS.set(timeZone, formatter);
+  }
+  const parts = formatter.formatToParts(date);
   const value = (type: Intl.DateTimeFormatPartTypes) => parts.find((part) => part.type === type)?.value ?? '';
   const weekdays: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
   return {

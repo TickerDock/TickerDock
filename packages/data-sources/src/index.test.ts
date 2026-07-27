@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   BinanceGateway,
-  EastMoneyFundEstimateGateway,
   EastMoneyFundInsightsGateway,
   EastMoneyMarketSentimentGateway,
   FundApiGateway,
@@ -15,13 +14,16 @@ import {
   parseIwenCaiHotData,
   parseIwenCaiReports,
   parseMarketBreadth,
-  parseStockConnectFlow,
+  normalizeMarketFundFlow,
+  normalizeSectorFundFlowRank,
+  normalizeStockFundFlowRank,
   parseBocForexHtml,
   parseEastMoneyFundHoldings,
   parseEastMoneyFundDetailPage,
   parseEastMoneyFundDiagnosis,
   parseEastMoneyFundInstitutionRatings,
   SinaFuturesGateway,
+  StockSdkFundEstimateGateway,
   StockApiGateway,
   XuanGuBaoFlashNewsGateway,
   XueqiuGateway,
@@ -89,6 +91,33 @@ describe('StockApiGateway', () => {
       { code: 'SH000001', status: 'live' },
     ]);
   });
+
+  it('loads and normalizes K-lines through stock-sdk', async () => {
+    let sdkOptions: unknown;
+    const sdk = { kline: {
+      cn: async (_code: string, options: unknown) => {
+        sdkOptions = options;
+        return [
+          { date: '2026-07-01', open: 1, close: 2, high: 3, low: 1, volume: 10 },
+          { date: '2026-07-02', open: 2, close: 3, high: 4, low: 2, volume: 20 },
+          { date: '2026-07-03', open: 3, close: 4, high: 5, low: 3, volume: 30 },
+        ];
+      },
+      hk: vi.fn(),
+      us: vi.fn(),
+    } };
+    const gateway = new StockApiGateway({} as never, sdk as never);
+
+    await expect(gateway.getKlines('SH600519', {
+      period: 'week', count: 2, adjust: 'none',
+    })).resolves.toEqual([
+      { date: '2026-07-02', open: 2, close: 3, high: 4, low: 2, volume: 20, source: 'stock-sdk' },
+      { date: '2026-07-03', open: 3, close: 4, high: 5, low: 3, volume: 30, source: 'stock-sdk' },
+    ]);
+    expect(sdkOptions).toMatchObject({
+      period: 'weekly', adjust: '', startDate: expect.stringMatching(/^\d{8}$/), endDate: expect.stringMatching(/^\d{8}$/),
+    });
+  });
 });
 
 describe('FundApiGateway', () => {
@@ -113,16 +142,47 @@ describe('FundApiGateway', () => {
   });
 });
 
-describe('EastMoneyFundEstimateGateway', () => {
-  it('parses JSONP estimates and normalizes percentage points', async () => {
-    const request = async () => new Response(
-      'jsonpgz({"fundcode":"110022","jzrq":"2026-07-15","gsz":"2.8400","gszzl":"3.2352","gztime":"2026-07-16 14:30"});'
-    );
-    const gateway = new EastMoneyFundEstimateGateway(request as typeof fetch);
+describe('StockSdkFundEstimateGateway', () => {
+  it('normalizes stock-sdk percentage points', async () => {
+    const sdk = { fund: { estimate: async () => ({
+      code: '110022', navDate: '2026-07-15', estimatedNav: 2.84,
+      estimatedChangePercent: 3.2352, estimateTime: '2026-07-16 14:30',
+    }) } };
+    const gateway = new StockSdkFundEstimateGateway(fetch, sdk);
     await expect(gateway.getEstimates(['110022'])).resolves.toEqual([{
       code: '110022', estimatedNav: 2.84, estimatedChangeRatio: 0.032352,
-      estimateTime: '2026-07-16 14:30', confirmedNavDate: '2026-07-15', source: 'eastmoney-estimate',
+      estimateTime: '2026-07-16 14:30', confirmedNavDate: '2026-07-15', source: 'stock-sdk',
     }]);
+  });
+
+  it('ignores unavailable stock-sdk estimates', async () => {
+    const sdk = { fund: { estimate: async (code: string) => ({
+      code, navDate: null, estimatedNav: null,
+      estimatedChangePercent: null, estimateTime: null,
+    }) } };
+    const gateway = new StockSdkFundEstimateGateway(fetch, sdk);
+
+    await expect(gateway.getEstimates(['110022'])).resolves.toEqual([]);
+  });
+
+  it('limits concurrent estimate requests', async () => {
+    let active = 0;
+    let peak = 0;
+    const sdk = { fund: { estimate: async (code: string) => {
+      active += 1;
+      peak = Math.max(peak, active);
+      await Promise.resolve();
+      active -= 1;
+      return {
+        code, navDate: '2026-07-15', estimatedNav: 1,
+        estimatedChangePercent: 0, estimateTime: '2026-07-16 14:30',
+      };
+    } } };
+    const gateway = new StockSdkFundEstimateGateway(fetch, sdk);
+
+    await expect(gateway.getEstimates(Array.from({ length: 10 }, (_, index) => String(index))))
+      .resolves.toHaveLength(10);
+    expect(peak).toBe(4);
   });
 });
 
@@ -411,34 +471,86 @@ describe('EastMoney market sentiment normalization', () => {
     }]);
   });
 
-  it('requests the live concept-board ranking with cache busting', async () => {
+  it('uses the stock-sdk concept ranking and supplements the leader code', async () => {
     const requested: string[] = [];
     const request = async (input: string | URL | Request) => {
       const url = String(input);
       requested.push(url);
-      if (url.includes('/api/qt/clist/get')) {
-        return Response.json({ data: { diff: [{
-          f12: 'BK0001', f14: 'Live Theme', f3: 2,
-          f140: '600000', f128: 'Leader', f136: 5,
-        }] } });
-      }
+      if (url.includes('/api/qt/clist/get')) return Response.json({ data: { diff: [{
+        f12: 'BK0001', f14: 'Live Theme', f3: 2,
+        f140: '600000', f128: 'Leader', f136: 5,
+      }] } });
       return Response.json([]);
     };
+    const sdk = {
+      board: { concept: { list: async () => [{
+        code: 'BK0001', name: 'SDK Theme', changePercent: 3,
+        leadingStock: 'Leader', leadingStockChangePercent: 6,
+      }] } },
+      fundFlow: {
+        market: async () => [],
+        rank: async () => [],
+        sectorRank: async () => [],
+      },
+    };
 
-    const snapshot = await new EastMoneyMarketSentimentGateway(request as typeof fetch).getSnapshot();
+    const snapshot = await new EastMoneyMarketSentimentGateway(request as typeof fetch, sdk).getSnapshot();
 
-    expect(snapshot.hotThemes[0]?.name).toBe('Live Theme');
+    expect(snapshot.hotThemes[0]).toEqual({
+      code: 'BK0001', name: 'SDK Theme', changeRatio: 0.03,
+      leadingStockCode: '600000', leadingStockName: 'Leader', leadingStockChangeRatio: 0.06,
+    });
     expect(requested.some((url) => url.includes('/api/qt/clist/get'))).toBe(true);
     expect(requested.every((url) => new URL(url).searchParams.has('_'))).toBe(true);
   });
 
-  it('filters future placeholders and all-zero Stock Connect rows', () => {
-    expect(parseStockConnectFlow({ data: { s2n: [
-      '9:30,10000,0,0,-20000,0,0,-10000,0,0',
-      '9:31,0.00,0,0,0.00,0,0,0.00,0,0',
-      '9:32,-,-,-,-,-,-,-,-,-',
-    ] } })).toEqual([{
-      time: '9:30', shanghaiNetInflowYi: 1, shenzhenNetInflowYi: -2, northboundNetInflowYi: -1,
+  it('falls back to the direct concept response when stock-sdk fails', async () => {
+    const request = async (input: string | URL | Request) => String(input).includes('/api/qt/clist/get')
+      ? Response.json({ data: { diff: [{
+          f12: 'BK0001', f14: 'Fallback Theme', f3: 2,
+          f140: '600000', f128: 'Leader', f136: 5,
+        }] } })
+      : Response.json([]);
+    const sdk = {
+      board: { concept: { list: async () => { throw new Error('offline'); } } },
+      fundFlow: {
+        market: async () => [],
+        rank: async () => [],
+        sectorRank: async () => [],
+      },
+    };
+
+    const snapshot = await new EastMoneyMarketSentimentGateway(request as typeof fetch, sdk).getSnapshot();
+
+    expect(snapshot.hotThemes[0]?.name).toBe('Fallback Theme');
+  });
+
+  it('normalizes stock-sdk market fund flow amounts to hundred millions', () => {
+    expect(normalizeMarketFundFlow([{
+      date: '2026-07-27', mainNetInflow: 100000000, superLargeNetInflow: 500000000,
+      largeNetInflow: -400000000, mediumNetInflow: 300000000, smallNetInflow: -200000000,
+    }])).toEqual([{
+      date: '2026-07-27', mainNetInflowYi: 1, superLargeNetInflowYi: 5,
+      largeNetInflowYi: -4, mediumNetInflowYi: 3, smallNetInflowYi: -2,
+    }]);
+  });
+
+  it('normalizes stock and sector fund flow rankings', () => {
+    expect(normalizeStockFundFlowRank([{
+      code: '600000', name: 'Stock', price: 12.3, changePercent: 2,
+      mainNetInflow: 300000000, mainNetInflowPercent: 6,
+    }])).toEqual([{
+      code: '600000', name: 'Stock', price: 12.3, changeRatio: 0.02,
+      mainNetInflowYi: 3, mainNetInflowRatio: 0.06,
+    }]);
+    expect(normalizeSectorFundFlowRank([{
+      code: 'BK0001', name: 'Sector', changePercent: 1,
+      mainNetInflow: 500000000, mainNetInflowPercent: 10,
+      topStockCode: 'Leader', topStockName: '600001',
+    }])).toEqual([{
+      code: 'BK0001', name: 'Sector', changeRatio: 0.01,
+      mainNetInflowYi: 5, mainNetInflowRatio: 0.1,
+      topStockCode: '600001', topStockName: 'Leader',
     }]);
   });
 });

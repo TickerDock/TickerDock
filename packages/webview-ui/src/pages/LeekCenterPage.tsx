@@ -1,21 +1,24 @@
 import { useEffect, useMemo, useState, type ReactElement } from 'react';
 import { StockExtendedDetailContent } from './StockExtendedDetailPage';
-import { postMessage, PROTOCOL_VERSION, type FundQuote, type LeekCenterPage as Page, type LeekCenterWatchlist, type StockExtendedDetail, type StockQuote } from '../protocol';
+import { getWebviewState, postMessage, PROTOCOL_VERSION, setWebviewState, type FundQuote, type LeekCenterPage as Page, type LeekCenterWatchlist, type StockExtendedDetail, type StockQuote } from '../protocol';
 
 type Entry = { key: string; kind: 'stock'; group: string; item: StockQuote } | { key: string; kind: 'fund'; group: string; item: FundQuote };
+type LeekCenterState = { tab?: 'data-center' | 'watchlist'; pageId?: string; selected?: string; watchlist?: LeekCenterWatchlist };
 const groups = [['Market', '行情'], ['Trading', '交易'], ['Issuance', '发行'], ['Research', '研报']] as const;
 
 export function LeekCenterPage({ pages, initialPageId, initialWatchlist }: { pages: Page[]; initialPageId: string; initialWatchlist: LeekCenterWatchlist }): ReactElement {
-  const [tab, setTab] = useState<'data-center' | 'watchlist'>('data-center');
-  const [pageId, setPageId] = useState(initialPageId);
-  const [watchlist, setWatchlist] = useState(initialWatchlist);
-  const [selected, setSelected] = useState('');
+  const restored = useMemo(() => getWebviewState<LeekCenterState>(), []);
+  const [tab, setTab] = useState<'data-center' | 'watchlist'>(restored?.tab ?? 'data-center');
+  const [pageId, setPageId] = useState(restored?.pageId ?? initialPageId);
+  const [watchlist, setWatchlist] = useState(restored?.watchlist ?? initialWatchlist);
+  const [selected, setSelected] = useState(restored?.selected ?? '');
   const [frameKey, setFrameKey] = useState(0);
   const [frameLoading, setFrameLoading] = useState(true);
   const [details, setDetails] = useState<Record<string, StockExtendedDetail | string>>({});
   const entries = useMemo(() => watchEntries(watchlist), [watchlist]);
   const activeEntry = entries.find((entry) => entry.key === selected) ?? entries[0];
   const activePage = pages.find((page) => page.id === pageId) ?? pages[0];
+  useEffect(() => { setWebviewState({ tab, pageId, selected, watchlist } satisfies LeekCenterState); }, [pageId, selected, tab, watchlist]);
   useEffect(() => { if (activeEntry && activeEntry.key !== selected) setSelected(activeEntry.key); }, [activeEntry, selected]);
   useEffect(() => {
     const listener = (event: MessageEvent) => {

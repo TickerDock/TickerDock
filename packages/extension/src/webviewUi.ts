@@ -15,7 +15,7 @@ export type WebviewBootstrap =
   | { page: 'fundRanking'; items?: unknown[]; error?: string }
   | { page: 'fundFlows'; industry?: unknown[]; concept?: unknown[]; region?: unknown[]; error?: string }
   | { page: 'stockExtendedDetail'; title: string; detail?: unknown; error?: string }
-  | { page: 'marketSentiment'; snapshot?: unknown; error?: string }
+  | { page: 'marketSentiment'; snapshot?: unknown; loadingSections?: string[]; error?: string }
   | { page: 'fundComparison'; series?: unknown[]; failedCodes: string[]; controls: ReadonlyArray<{ id: string; label: string }>; active: string; error?: string }
   | { page: 'fundOverview'; funds: unknown[]; selectedCode: string; history: unknown[]; range: string; loading: boolean; error?: string }
   | { page: 'fundTrend'; title: string; data?: unknown[]; controls: ReadonlyArray<{ id: string; label: string }>; active: string; error?: string }

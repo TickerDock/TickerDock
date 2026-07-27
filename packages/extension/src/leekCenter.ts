@@ -15,8 +15,11 @@ export interface LeekCenterOptions {
   loadStockDetails?: (code: string, name: string, token?: string) => Promise<StockExtendedDetail>;
 }
 
-export async function updateLeekCenterWatchlist(data: LeekCenterWatchlistData): Promise<void> {
+export async function updateLeekCenterWatchlist(
+  value: LeekCenterWatchlistData | (() => LeekCenterWatchlistData)
+): Promise<void> {
   if (!activeOptions) return;
+  const data = typeof value === 'function' ? value() : value;
   activeOptions = { ...activeOptions, watchlist: data };
   if (panel) await postWebviewMessage(panel.webview, 'leekWatchlistData', { data });
 }
@@ -42,7 +45,7 @@ export async function showLeekCenter(initialPageId?: string, options?: LeekCente
     ViewColumn.One,
     {
       enableScripts: true,
-      retainContextWhenHidden: true,
+      retainContextWhenHidden: false,
       portMapping: [{ webviewPort: proxy.port, extensionHostPort: proxy.port }],
       localResourceRoots: [Uri.joinPath(activeOptions?.extensionUri ?? Uri.file(''), 'assets'), webviewUiRoot(activeOptions?.extensionUri ?? Uri.file(''))],
     }

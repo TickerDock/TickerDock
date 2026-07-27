@@ -4,6 +4,7 @@ export type RefreshReason = 'initial' | 'scheduled' | 'manual';
 
 export class RefreshController implements Disposable {
   private timer: NodeJS.Timeout | undefined;
+  private started = false;
   private running = false;
   private disposed = false;
 
@@ -13,12 +14,20 @@ export class RefreshController implements Disposable {
   ) {}
 
   start(): void {
+    if (this.started || this.disposed) return;
+    this.started = true;
     this.schedule(0, 'initial');
+  }
+
+  stop(): void {
+    this.started = false;
+    if (this.timer) clearTimeout(this.timer);
+    this.timer = undefined;
   }
 
   updateInterval(intervalMs: number): void {
     this.intervalMs = intervalMs;
-    this.schedule(intervalMs);
+    if (this.started) this.schedule(intervalMs);
   }
 
   async refreshNow(): Promise<void> {
@@ -37,16 +46,16 @@ export class RefreshController implements Disposable {
 
   dispose(): void {
     this.disposed = true;
-    if (this.timer) clearTimeout(this.timer);
-    this.timer = undefined;
+    this.stop();
   }
 
   private schedule(delay: number, reason: RefreshReason = 'scheduled'): void {
-    if (this.disposed) return;
+    if (!this.started || this.disposed) return;
     if (this.timer) clearTimeout(this.timer);
     this.timer = setTimeout(async () => {
+      this.timer = undefined;
       await this.run(reason);
-      this.schedule(this.intervalMs);
+      if (this.started) this.schedule(this.intervalMs);
     }, delay);
   }
 }

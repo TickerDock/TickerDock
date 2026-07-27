@@ -1,5 +1,6 @@
 import { funds } from 'fund-api';
 import { stocks } from 'stock-api';
+import { StockSDK } from 'stock-sdk';
 import { parse } from 'node-html-parser';
 import { createHash } from 'node:crypto';
 import {
@@ -34,7 +35,9 @@ import {
   StockIwenCaiGateway,
   StockIwenCaiInsights,
   StockInstitutionReport,
-  StockConnectFlowPoint,
+  MarketFundFlowPoint,
+  SectorFundFlowRankItem,
+  StockFundFlowRankItem,
   StockQuote,
   StockResearchGateway,
   StockResearchItem,
@@ -44,8 +47,102 @@ import {
 type StockApiClient = typeof stocks.auto;
 type FundApiClient = typeof funds.auto;
 
+type SdkKlineRow = {
+  date: string;
+  open: number | null;
+  close: number | null;
+  high: number | null;
+  low: number | null;
+  volume: number | null;
+};
+
+interface StockSdkKlineClient {
+  kline: {
+    cn: (code: string, options: SdkKlineOptions) => Promise<SdkKlineRow[]>;
+    hk: (code: string, options: SdkKlineOptions) => Promise<SdkKlineRow[]>;
+    us: (code: string, options: SdkKlineOptions) => Promise<SdkKlineRow[]>;
+  };
+}
+
+interface StockSdkFundClient {
+  fund: {
+    estimate: (code: string) => Promise<{
+      code: string;
+      navDate: string | null;
+      estimatedNav: number | null;
+      estimatedChangePercent: number | null;
+      estimateTime: string | null;
+    }>;
+  };
+}
+
+interface StockSdkMarketClient {
+  board: {
+    concept: {
+      list: () => Promise<Array<{
+        code: string;
+        name: string;
+        changePercent: number | null;
+        leadingStock: string | null;
+        leadingStockChangePercent: number | null;
+      }>>;
+    };
+  };
+  fundFlow: {
+    market: () => Promise<SdkMarketFundFlowRow[]>;
+    rank: (options?: SdkFundFlowRankOptions) => Promise<SdkStockFundFlowRankRow[]>;
+    sectorRank: (options?: SdkFundFlowRankOptions) => Promise<SdkSectorFundFlowRankRow[]>;
+  };
+}
+
+type SdkFundFlowRankOptions = {
+  indicator?: 'today' | '3day' | '5day' | '10day';
+  sectorType?: 'industry' | 'concept' | 'region';
+};
+
+type SdkMarketFundFlowRow = {
+  date: string;
+  mainNetInflow: number | null;
+  superLargeNetInflow: number | null;
+  largeNetInflow: number | null;
+  mediumNetInflow: number | null;
+  smallNetInflow: number | null;
+};
+
+type SdkStockFundFlowRankRow = {
+  code: string;
+  name: string;
+  price: number | null;
+  changePercent: number | null;
+  mainNetInflow: number | null;
+  mainNetInflowPercent: number | null;
+};
+
+type SdkSectorFundFlowRankRow = {
+  code: string;
+  name: string;
+  changePercent: number | null;
+  mainNetInflow: number | null;
+  mainNetInflowPercent: number | null;
+  topStockCode?: string;
+  topStockName?: string;
+};
+
+type SdkKlineOptions = {
+  period: 'daily' | 'weekly' | 'monthly';
+  adjust: '' | 'qfq' | 'hfq';
+  startDate?: string;
+  endDate?: string;
+};
+
+const defaultStockSdk = createStockSdk();
+const FUND_ESTIMATE_CONCURRENCY = 4;
+
 export class StockApiGateway implements StockGateway {
-  constructor(private readonly client: StockApiClient = stocks.auto) {}
+  constructor(
+    private readonly client: StockApiClient = stocks.auto,
+    private readonly sdk: StockSdkKlineClient = defaultStockSdk
+  ) {}
 
   async getQuotes(codes: readonly string[]): Promise<StockQuote[]> {
     const supported = codes.flatMap((canonicalCode) => {
@@ -93,8 +190,28 @@ export class StockApiGateway implements StockGateway {
     options?: { period?: 'day' | 'week' | 'month'; count?: number; adjust?: 'none' | 'qfq' | 'hfq' }
   ): Promise<Kline[]> {
     const apiCode = toStockApiCode(code);
-    const indexCode = ({ USDJI: 'US.DJI', USIXIC: 'US.IXIC', USINX: 'US.INX' } as const)[apiCode as 'USDJI' | 'USIXIC' | 'USINX'];
-    return this.client.getKlines(indexCode ?? apiCode, indexCode ? { ...options, adjust: 'none' } : options);
+    const market = marketFromLegacyCode(apiCode);
+    const method = market === 'hk'
+      ? this.sdk.kline.hk
+      : market === 'us' ? this.sdk.kline.us : this.sdk.kline.cn;
+    const range = sdkKlineRange(options?.period ?? 'day', options?.count);
+    const rows = await method(apiCode, {
+      period: sdkKlinePeriod(options?.period),
+      adjust: options?.adjust === 'none' ? '' : options?.adjust ?? 'qfq',
+      ...range,
+    });
+    return rows.flatMap((row) => {
+      if ([row.open, row.close, row.high, row.low].some((value) => value === null)) return [];
+      return [{
+        date: row.date,
+        open: row.open!,
+        close: row.close!,
+        high: row.high!,
+        low: row.low!,
+        volume: row.volume ?? undefined,
+        source: 'stock-sdk',
+      }];
+    }).slice(-(options?.count ?? rows.length));
   }
 }
 
@@ -196,34 +313,33 @@ export class FundApiGateway implements FundGateway {
   }
 }
 
-export class EastMoneyFundEstimateGateway implements FundEstimateGateway {
-  constructor(private readonly request: typeof fetch = fetch) {}
+export class StockSdkFundEstimateGateway implements FundEstimateGateway {
+  private readonly sdk: StockSdkFundClient;
+
+  constructor(request: typeof fetch = fetch, sdk?: StockSdkFundClient) {
+    this.sdk = sdk ?? (request === fetch ? defaultStockSdk : createStockSdk(request));
+  }
 
   async getEstimates(codes: readonly string[]): Promise<FundEstimate[]> {
-    const results = await Promise.allSettled(codes.map((code) => this.getEstimate(code)));
+    const results: PromiseSettledResult<FundEstimate | undefined>[] = [];
+    for (let index = 0; index < codes.length; index += FUND_ESTIMATE_CONCURRENCY) {
+      results.push(...await Promise.allSettled(
+        codes.slice(index, index + FUND_ESTIMATE_CONCURRENCY).map((code) => this.getEstimate(code))
+      ));
+    }
     return results.flatMap((result) => result.status === 'fulfilled' && result.value ? [result.value] : []);
   }
 
   private async getEstimate(code: string): Promise<FundEstimate | undefined> {
-    const response = await this.request(`https://fundgz.1234567.com.cn/js/${code}.js?rt=${Date.now()}`, {
-      headers: { Referer: 'https://fund.eastmoney.com/' },
-      signal: AbortSignal.timeout(8000),
-    });
-    if (!response.ok) return undefined;
-    const body = await response.text();
-    const matched = /jsonpgz\((.*)\);?/.exec(body);
-    if (!matched?.[1]) return undefined;
-    const value = JSON.parse(matched[1]) as Record<string, string>;
-    const estimatedNav = Number(value.gsz);
-    const changePercent = Number(value.gszzl);
-    if (!Number.isFinite(estimatedNav) || !Number.isFinite(changePercent)) return undefined;
+    const value = await this.sdk.fund.estimate(code);
+    if (value.estimatedNav === null || value.estimatedChangePercent === null) return undefined;
     return {
-      code: value.fundcode || code,
-      estimatedNav,
-      estimatedChangeRatio: changePercent / 100,
-      estimateTime: value.gztime || '',
-      confirmedNavDate: value.jzrq || '',
-      source: 'eastmoney-estimate',
+      code: value.code || code,
+      estimatedNav: value.estimatedNav,
+      estimatedChangeRatio: value.estimatedChangePercent / 100,
+      estimateTime: value.estimateTime || '',
+      confirmedNavDate: value.navDate || '',
+      source: 'stock-sdk',
     };
   }
 }
@@ -721,19 +837,70 @@ export class EastMoneyFundInsightsGateway implements FundInsightsGateway {
 }
 
 export class EastMoneyMarketSentimentGateway implements MarketSentimentGateway {
-  constructor(private readonly request: typeof fetch = fetch) {}
+  private readonly sdk: StockSdkMarketClient;
+
+  constructor(private readonly request: typeof fetch = fetch, sdk?: StockSdkMarketClient) {
+    this.sdk = sdk ?? (request === fetch ? defaultStockSdk : createStockSdk(request));
+  }
 
   async getSnapshot(): Promise<MarketSentimentSnapshot> {
     const results = await Promise.allSettled([
-      this.getJson('https://emdatah5.eastmoney.com/dc/NXFXB/GetUpDownData?type=0'),
-      this.getJson('https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=10&po=1&np=1&fltt=2&invt=2&fid=f3&fs=m:90+t:3&fields=f12,f14,f3,f128,f140,f136'),
-      this.getJson('https://push2.eastmoney.com/api/qt/kamtbs.rtmin/get?fields1=f1,f3&fields2=f51,f54,f52,f53,f58,f56,f57,f62,f60,f61'),
+      this.getBreadth(),
+      this.getHotThemes(),
+      this.getMarketFundFlow(),
+      this.getStockFundFlowRank(),
+      this.getSectorFundFlowRank(),
     ]);
     return {
-      breadth: results[0]?.status === 'fulfilled' ? parseMarketBreadth(results[0].value) : undefined,
-      hotThemes: results[1]?.status === 'fulfilled' ? parseHotMarketThemes(results[1].value) : [],
-      stockConnectFlow: results[2]?.status === 'fulfilled' ? parseStockConnectFlow(results[2].value) : [],
+      breadth: results[0]?.status === 'fulfilled' ? results[0].value : undefined,
+      hotThemes: results[1]?.status === 'fulfilled' ? results[1].value : [],
+      marketFundFlow: results[2]?.status === 'fulfilled' ? results[2].value : [],
+      stockFundFlowRank: results[3]?.status === 'fulfilled' ? results[3].value : [],
+      sectorFundFlowRank: results[4]?.status === 'fulfilled' ? results[4].value : [],
     };
+  }
+
+  async getBreadth(): Promise<MarketBreadthSummary | undefined> {
+    return parseMarketBreadth(await this.getJson('https://emdatah5.eastmoney.com/dc/NXFXB/GetUpDownData?type=0'));
+  }
+
+  async getMarketFundFlow(): Promise<MarketFundFlowPoint[]> {
+    return normalizeMarketFundFlow(await this.sdk.fundFlow.market());
+  }
+
+  async getStockFundFlowRank(): Promise<StockFundFlowRankItem[]> {
+    return normalizeStockFundFlowRank(await this.sdk.fundFlow.rank({ indicator: 'today' }));
+  }
+
+  async getSectorFundFlowRank(): Promise<SectorFundFlowRankItem[]> {
+    return normalizeSectorFundFlowRank(await this.sdk.fundFlow.sectorRank({
+      indicator: 'today', sectorType: 'industry',
+    }));
+  }
+
+  async getHotThemes(): Promise<HotMarketTheme[]> {
+    const supplementUrl = 'https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=10&po=1&np=1&fltt=2&invt=2&fid=f3&fs=m:90+t:3&fields=f12,f14,f3,f128,f140,f136';
+    const [sdkResult, supplementResult] = await Promise.allSettled([
+      this.sdk.board.concept.list(),
+      this.getJson(supplementUrl),
+    ]);
+    const supplement = supplementResult.status === 'fulfilled'
+      ? parseHotMarketThemes(supplementResult.value)
+      : [];
+    if (sdkResult.status !== 'fulfilled') return supplement;
+
+    const details = new Map(supplement.map((item) => [item.code, item]));
+    return sdkResult.value.slice(0, 10).map((board) => {
+      const detail = details.get(board.code);
+      return {
+        code: board.code,
+        name: board.name,
+        changeRatio: (board.changePercent ?? 0) / 100,
+        leadingStockCode: detail?.leadingStockCode ?? '',
+        leadingStockName: board.leadingStock ?? detail?.leadingStockName ?? '',
+        leadingStockChangeRatio: (board.leadingStockChangePercent ?? 0) / 100,
+      };
+    });
   }
 
   private async getJson(url: string): Promise<unknown> {
@@ -750,6 +917,63 @@ export class EastMoneyMarketSentimentGateway implements MarketSentimentGateway {
     if (!response.ok) throw new Error(`EastMoney market sentiment request failed: ${response.status}`);
     return response.json();
   }
+}
+
+function createStockSdk(request: typeof fetch = fetch): StockSDK {
+  return new StockSDK({
+    fetchImpl: limitSdkFundFlowRankPages(request),
+    retry: { maxRetries: 1, baseDelay: 300 },
+    providerPolicies: {
+      tencent: { timeout: 8000 },
+      eastmoney: { timeout: 10000, rateLimit: { requestsPerSecond: 5, maxBurst: 5 } },
+      sina: { timeout: 8000 },
+    },
+  });
+}
+
+function limitSdkFundFlowRankPages(request: typeof fetch): typeof fetch {
+  return async (input: string | URL | Request, init?: RequestInit) => {
+    const response = await request(input, init);
+    const requestUrl = new URL(input instanceof Request ? input.url : String(input));
+    if (!response.ok || !requestUrl.pathname.endsWith('/api/qt/clist/get')
+      || requestUrl.searchParams.get('fid') !== 'f62' || requestUrl.searchParams.get('pn') !== '1') return response;
+    const payload = await response.clone().json() as { data?: { total?: number } };
+    if (!payload.data || typeof payload.data.total !== 'number' || payload.data.total <= 100) return response;
+
+    // fundFlow.rank has no limit option; cap pagination because the UI only consumes the leading ten rows.
+    payload.data.total = 100;
+    const headers = new Headers(response.headers);
+    headers.delete('content-encoding');
+    headers.delete('content-length');
+    return new Response(JSON.stringify(payload), {
+      status: response.status,
+      statusText: response.statusText,
+      headers,
+    });
+  };
+}
+
+function sdkKlinePeriod(period: 'day' | 'week' | 'month' = 'day'): SdkKlineOptions['period'] {
+  return period === 'week' ? 'weekly' : period === 'month' ? 'monthly' : 'daily';
+}
+
+function sdkKlineRange(
+  period: 'day' | 'week' | 'month',
+  count: number | undefined,
+  now = new Date()
+): Pick<SdkKlineOptions, 'startDate' | 'endDate'> {
+  if (!count || count <= 0) return {};
+  const daysPerBar = period === 'month' ? 45 : period === 'week' ? 10 : 2;
+  const start = new Date(now);
+  start.setDate(start.getDate() - count * daysPerBar - 30);
+  return { startDate: compactDate(start), endDate: compactDate(now) };
+}
+
+function compactDate(value: Date): string {
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, '0');
+  const day = String(value.getDate()).padStart(2, '0');
+  return `${year}${month}${day}`;
 }
 
 export function parseMarketBreadth(value: unknown): MarketBreadthSummary | undefined {
@@ -823,26 +1047,53 @@ export function parseHotMarketThemes(value: unknown): HotMarketTheme[] {
   }).slice(0, 10);
 }
 
-export function parseStockConnectFlow(value: unknown): StockConnectFlowPoint[] {
-  const root = record(value);
-  const data = record(root?.data);
-  const rows = Array.isArray(data?.s2n) ? data.s2n : [];
-  return rows.flatMap((raw) => {
-    if (typeof raw !== 'string') return [];
-    const fields = raw.split(',');
-    if (fields.length < 8) return [];
-    const shanghai = optionalNumber(fields[1]);
-    const shenzhen = optionalNumber(fields[4]);
-    const northbound = optionalNumber(fields[7]);
-    if (shanghai === undefined || shenzhen === undefined || northbound === undefined) return [];
-    if (shanghai === 0 && shenzhen === 0 && northbound === 0) return [];
+export function normalizeMarketFundFlow(rows: SdkMarketFundFlowRow[]): MarketFundFlowPoint[] {
+  return rows.flatMap((row) => {
+    if (!row.date || row.mainNetInflow === null || row.superLargeNetInflow === null
+      || row.largeNetInflow === null || row.mediumNetInflow === null || row.smallNetInflow === null) return [];
     return [{
-      time: fields[0] || '',
-      shanghaiNetInflowYi: shanghai / 10000,
-      shenzhenNetInflowYi: shenzhen / 10000,
-      northboundNetInflowYi: northbound / 10000,
+      date: row.date,
+      mainNetInflowYi: row.mainNetInflow / 100_000_000,
+      superLargeNetInflowYi: row.superLargeNetInflow / 100_000_000,
+      largeNetInflowYi: row.largeNetInflow / 100_000_000,
+      mediumNetInflowYi: row.mediumNetInflow / 100_000_000,
+      smallNetInflowYi: row.smallNetInflow / 100_000_000,
     }];
-  });
+  }).slice(-30);
+}
+
+export function normalizeStockFundFlowRank(rows: SdkStockFundFlowRankRow[]): StockFundFlowRankItem[] {
+  return rows.flatMap((row) => row.code && row.name && row.mainNetInflow !== null ? [{
+    code: row.code,
+    name: row.name,
+    price: row.price ?? undefined,
+    changeRatio: row.changePercent === null ? undefined : row.changePercent / 100,
+    mainNetInflowYi: row.mainNetInflow / 100_000_000,
+    mainNetInflowRatio: row.mainNetInflowPercent === null ? undefined : row.mainNetInflowPercent / 100,
+  }] : []).slice(0, 10);
+}
+
+export function normalizeSectorFundFlowRank(rows: SdkSectorFundFlowRankRow[]): SectorFundFlowRankItem[] {
+  return rows.flatMap((row) => {
+    if (!row.code || !row.name || row.mainNetInflow === null) return [];
+    const leader = normalizeSdkLeader(row.topStockCode, row.topStockName);
+    return [{
+      code: row.code,
+      name: row.name,
+      changeRatio: row.changePercent === null ? undefined : row.changePercent / 100,
+      mainNetInflowYi: row.mainNetInflow / 100_000_000,
+      mainNetInflowRatio: row.mainNetInflowPercent === null ? undefined : row.mainNetInflowPercent / 100,
+      ...leader,
+    }];
+  }).slice(0, 10);
+}
+
+function normalizeSdkLeader(code?: string, name?: string): Pick<SectorFundFlowRankItem, 'topStockCode' | 'topStockName'> {
+  const codePattern = /^(?:SH|SZ|BJ)?\d{6}$/i;
+  if (name && codePattern.test(name) && code && !codePattern.test(code)) {
+    return { topStockCode: name, topStockName: code };
+  }
+  return { topStockCode: code, topStockName: name };
 }
 
 export class XueqiuGateway implements SocialFeedGateway {

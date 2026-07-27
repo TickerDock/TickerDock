@@ -1,19 +1,45 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
-  appendLine: vi.fn(),
-  outputShow: vi.fn(),
+  postMessage: vi.fn(),
+  panelReveal: vi.fn(),
   statusShow: vi.fn(),
   statusHide: vi.fn(),
+  receiveMessage: undefined as ((message: unknown) => void) | undefined,
+  disposePanel: undefined as (() => void) | undefined,
 }));
 
 vi.mock('vscode', () => ({
+  EventEmitter: class<T> {
+    private readonly listeners = new Set<(value: T) => void>();
+    readonly event = (listener: (value: T) => void) => {
+      this.listeners.add(listener);
+      return { dispose: () => this.listeners.delete(listener) };
+    };
+    fire(value: T): void { this.listeners.forEach((listener) => listener(value)); }
+    dispose(): void { this.listeners.clear(); }
+  },
   StatusBarAlignment: { Right: 2 },
+  ViewColumn: { Beside: 2 },
+  Uri: { parse: (value: string) => ({ scheme: new URL(value).protocol.slice(0, -1) }) },
+  env: { openExternal: vi.fn() },
   window: {
-    createOutputChannel: () => ({
-      appendLine: mocks.appendLine,
-      show: mocks.outputShow,
-      dispose: vi.fn(),
+    createWebviewPanel: () => ({
+      webview: {
+        cspSource: 'test-source',
+        html: '',
+        postMessage: mocks.postMessage,
+        onDidReceiveMessage: (listener: (message: unknown) => void) => {
+          mocks.receiveMessage = listener;
+          return { dispose: vi.fn() };
+        },
+      },
+      reveal: mocks.panelReveal,
+      onDidDispose: (listener: () => void) => {
+        mocks.disposePanel = listener;
+        return { dispose: vi.fn() };
+      },
+      dispose: () => mocks.disposePanel?.(),
     }),
     createStatusBarItem: () => ({
       show: mocks.statusShow,
@@ -32,34 +58,41 @@ const news = [{
 }];
 
 describe('news output service', () => {
-  beforeEach(() => vi.clearAllMocks());
-
-  it('backfills the current news when the output is opened', () => {
-    const service = new NewsOutputService();
-    service.process(news);
-    expect(mocks.appendLine).not.toHaveBeenCalled();
-    service.show();
-    expect(mocks.appendLine).toHaveBeenCalledOnce();
-    expect(mocks.appendLine.mock.calls[0]![0]).toContain('Market update');
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.receiveMessage = undefined;
+    mocks.disposePanel = undefined;
   });
 
-  it('backfills after refresh when the output was opened before data arrived', () => {
+  it('buffers the first refresh until the console is ready', () => {
     const service = new NewsOutputService();
     service.show();
     service.process(news);
-    expect(mocks.appendLine).toHaveBeenCalledOnce();
+    expect(mocks.postMessage).not.toHaveBeenCalled();
+
+    mocks.receiveMessage?.({ type: 'ready' });
+    expect(mocks.postMessage).toHaveBeenCalledOnce();
+    expect(mocks.postMessage.mock.calls[0]![0]).toMatchObject({ type: 'append', item: news[0] });
   });
 
-  it('keeps an explicitly opened output channel live when background output is disabled', () => {
+  it('ignores refresh results after the console is closed', () => {
     const service = new NewsOutputService();
-    service.process(news);
     service.show();
-    service.process([...news, {
-      ...news[0]!, id: '2', time: '2026-07-20T08:01:00Z', title: 'Second update',
-    }]);
-    expect(mocks.appendLine).toHaveBeenCalledTimes(2);
-    expect(mocks.appendLine.mock.calls[1]![0]).toContain('Second update');
+    mocks.receiveMessage?.({ type: 'ready' });
+    mocks.disposePanel?.();
+    service.process(news);
+    expect(mocks.postMessage).not.toHaveBeenCalled();
+  });
+
+  it('reports open and close lifecycle changes', () => {
+    const service = new NewsOutputService();
+    const changes: boolean[] = [];
+    service.onDidChangeOpen((open) => changes.push(open));
+
+    service.show();
+    service.show();
+    expect(mocks.panelReveal).toHaveBeenCalledOnce();
+    mocks.disposePanel?.();
+    expect(changes).toEqual([true, false]);
   });
 });
-
-

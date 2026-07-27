@@ -30,7 +30,10 @@ export class ReminderService implements Disposable {
     if (this.disposed) return;
     const reminders = this.config.getStockReminders();
     const enabled = this.config.getRemindersEnabled();
-    const currentCodes = new Set(quotes.map(({ code }) => code));
+    const trackedCodes = new Set(enabled
+      ? [...reminders].flatMap(([code, rules]) => rules.length > 0 ? [code] : [])
+      : []);
+    const currentCodes = new Set(quotes.flatMap(({ code }) => trackedCodes.has(code) ? [code] : []));
     for (const code of this.previous.keys()) {
       if (!currentCodes.has(code)) {
         this.previous.delete(code);
@@ -44,10 +47,13 @@ export class ReminderService implements Disposable {
       }
     }
     for (const quote of quotes) {
+      if (!trackedCodes.has(quote.code)) continue;
       const previous = this.previous.get(quote.code);
       this.previous.set(quote.code, quote);
-      this.dirty = true;
-      if (!enabled || !previous) continue;
+      if (!previous || previous.price !== quote.price || previous.changeRatio !== quote.changeRatio) {
+        this.dirty = true;
+      }
+      if (!previous) continue;
       const events = evaluateStockReminders(previous, quote, reminders.get(quote.code) ?? []);
       if (events.length === 0 || !this.canNotify(quote.code)) continue;
       this.remindedAt.set(quote.code, Date.now());

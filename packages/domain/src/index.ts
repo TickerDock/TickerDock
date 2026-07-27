@@ -410,21 +410,49 @@ export interface HotMarketTheme {
   leadingStockChangeRatio: number;
 }
 
-export interface StockConnectFlowPoint {
-  time: string;
-  shanghaiNetInflowYi: number;
-  shenzhenNetInflowYi: number;
-  northboundNetInflowYi: number;
+export interface MarketFundFlowPoint {
+  date: string;
+  mainNetInflowYi: number;
+  superLargeNetInflowYi: number;
+  largeNetInflowYi: number;
+  mediumNetInflowYi: number;
+  smallNetInflowYi: number;
+}
+
+export interface StockFundFlowRankItem {
+  code: string;
+  name: string;
+  price?: number;
+  changeRatio?: number;
+  mainNetInflowYi: number;
+  mainNetInflowRatio?: number;
+}
+
+export interface SectorFundFlowRankItem {
+  code: string;
+  name: string;
+  changeRatio?: number;
+  mainNetInflowYi: number;
+  mainNetInflowRatio?: number;
+  topStockCode?: string;
+  topStockName?: string;
 }
 
 export interface MarketSentimentSnapshot {
   breadth?: MarketBreadthSummary;
   hotThemes: HotMarketTheme[];
-  stockConnectFlow: StockConnectFlowPoint[];
+  marketFundFlow: MarketFundFlowPoint[];
+  stockFundFlowRank: StockFundFlowRankItem[];
+  sectorFundFlowRank: SectorFundFlowRankItem[];
 }
 
 export interface MarketSentimentGateway {
   getSnapshot(): Promise<MarketSentimentSnapshot>;
+  getBreadth(): Promise<MarketBreadthSummary | undefined>;
+  getHotThemes(): Promise<HotMarketTheme[]>;
+  getMarketFundFlow(): Promise<MarketFundFlowPoint[]>;
+  getStockFundFlowRank(): Promise<StockFundFlowRankItem[]>;
+  getSectorFundFlowRank(): Promise<SectorFundFlowRankItem[]>;
 }
 
 export interface SocialUser {

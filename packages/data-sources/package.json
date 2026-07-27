@@ -15,6 +15,7 @@
     "@tickerdock/domain": "workspace:*",
     "node-html-parser": "7.0.1",
     "fund-api": "1.2.1",
-    "stock-api": "2.7.3"
+    "stock-api": "2.7.3",
+    "stock-sdk": "2.4.0"
   }
 }

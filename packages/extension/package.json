@@ -36,7 +36,6 @@
     "onView:tickerdock.fund",
     "onView:tickerdock.binance",
     "onView:tickerdock.forex",
-    "onView:tickerdock.news",
     "onView:tickerdock.sector",
     "onView:tickerdock.settings"
   ],
@@ -68,10 +67,6 @@
         {
           "id": "tickerdock.forex",
           "name": "Forex"
-        },
-        {
-          "id": "tickerdock.news",
-          "name": "Flash News"
         },
         {
           "id": "tickerdock.sector",
@@ -240,11 +235,6 @@
         "icon": "$(refresh)"
       },
       {
-        "command": "tickerdock.refreshNews",
-        "title": "刷新快讯",
-        "icon": "$(refresh)"
-      },
-      {
         "command": "tickerdock.showNewsOutput",
         "title": "显示快讯输出",
         "icon": "$(output)"
@@ -253,10 +243,6 @@
         "command": "tickerdock.toggleNewsOutput",
         "title": "切换快讯输出",
         "icon": "$(radio-tower)"
-      },
-      {
-        "command": "tickerdock.openFlashNews",
-        "title": "打开快讯"
       },
       {
         "command": "tickerdock.openLeekCenter",
@@ -581,13 +567,8 @@
           "group": "navigation"
         },
         {
-          "command": "tickerdock.refreshNews",
-          "when": "view == tickerdock.news",
-          "group": "navigation"
-        },
-        {
           "command": "tickerdock.showNewsOutput",
-          "when": "view == tickerdock.news",
+          "when": "view == tickerdock.stock",
           "group": "navigation"
         },
         {
@@ -741,11 +722,6 @@
           "command": "tickerdock.binanceDown",
           "when": "view == tickerdock.binance && viewItem == cryptoQuote",
           "group": "inline"
-        },
-        {
-          "command": "tickerdock.openFlashNews",
-          "when": "view == tickerdock.news && viewItem == flashNews",
-          "group": "inline"
         }
       ]
     },
@@ -804,7 +780,7 @@
         },
         "tickerdock.interval": {
           "type": "number",
-          "default": 5000,
+          "default": 15000,
           "minimum": 3000
         },
         "tickerdock.marketHoursEnabled": {

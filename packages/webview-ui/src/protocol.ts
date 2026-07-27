@@ -51,8 +51,11 @@ export type TrendControl = { id: string; label: string };
 export type MarketSentimentSnapshot = {
   breadth?: { time: string; rising: number; falling: number; unchanged: number; limitUp: number; naturalLimitUp: number; limitDown: number; distribution: { limitUp: number; aboveFive: number; upOneToFive: number; upZeroToOne: number; flat: number; downZeroToOne: number; downOneToFive: number; belowFive: number; limitDown: number } };
   hotThemes: Array<{ code: string; name: string; changeRatio: number; leadingStockCode: string; leadingStockName: string; leadingStockChangeRatio: number }>;
-  stockConnectFlow: Array<{ time: string; shanghaiNetInflowYi: number; shenzhenNetInflowYi: number; northboundNetInflowYi: number }>;
+  marketFundFlow: Array<{ date: string; mainNetInflowYi: number; superLargeNetInflowYi: number; largeNetInflowYi: number; mediumNetInflowYi: number; smallNetInflowYi: number }>;
+  stockFundFlowRank: Array<{ code: string; name: string; price?: number; changeRatio?: number; mainNetInflowYi: number; mainNetInflowRatio?: number }>;
+  sectorFundFlowRank: Array<{ code: string; name: string; changeRatio?: number; mainNetInflowYi: number; mainNetInflowRatio?: number; topStockCode?: string; topStockName?: string }>;
 };
+export type MarketSentimentSection = 'breadth' | 'hotThemes' | 'marketFundFlow' | 'stockFundFlowRank' | 'sectorFundFlowRank';
 export type StockExtendedDetail = {
   code: string; name: string; changeRatio: number;
   technical: { currentPrice: number; movingAverage20?: number; movingAverage60?: number; support?: number; resistance?: number; takeProfit?: number; stopLoss?: number; sampleSize: number };
@@ -82,7 +85,7 @@ export type Bootstrap =
   | { page: 'fundHoldings'; code: string; name: string; items?: FundHolding[]; error?: string }
   | { page: 'fundRanking'; items?: FundRankItem[]; error?: string }
   | { page: 'fundFlows'; industry?: FundFlowItem[]; concept?: FundFlowItem[]; region?: FundFlowItem[]; error?: string }
-  | { page: 'marketSentiment'; snapshot?: MarketSentimentSnapshot; error?: string }
+  | { page: 'marketSentiment'; snapshot?: Partial<MarketSentimentSnapshot>; loadingSections?: MarketSentimentSection[]; error?: string }
   | { page: 'fundComparison'; series?: FundComparisonSeries[]; failedCodes: string[]; controls: ComparisonControl[]; active: string; error?: string }
   | { page: 'fundOverview'; funds: FundQuote[]; selectedCode: string; history: FundNav[]; range: string; loading: boolean; error?: string }
   | { page: 'fundTrend'; title: string; data?: FundNav[]; controls: TrendControl[]; active: string; error?: string }
@@ -99,7 +102,7 @@ export type HostMessage = {
     | 'resetPersonalization' | 'saveStatusBarStocks' | 'openResearchUrl' | 'setDirty' | 'changeFundComparisonRange'
     | 'selectFundOverviewFund' | 'changeFundOverviewRange' | 'changeFundTrendRange' | 'changeStockChartMode' | 'changeStockKlinePeriod'
     | 'openLeekExternal' | 'refreshLeekWatchlist' | 'openLeekWatchlistDetails' | 'loadLeekStockDetails' | 'deleteAiKey'
-    | 'requestAiKey';
+    | 'requestAiKey' | 'marketSentimentReady';
   requestId: string;
   payload: unknown;
 };
@@ -108,6 +111,14 @@ const vscode = window.acquireVsCodeApi?.();
 
 export function postMessage(type: HostMessage['type'], payload: unknown): void {
   vscode?.postMessage({ version: PROTOCOL_VERSION, type, requestId: crypto.randomUUID(), payload });
+}
+
+export function getWebviewState<T>(): T | undefined {
+  return typeof vscode?.getState === 'function' ? vscode.getState() as T | undefined : undefined;
+}
+
+export function setWebviewState(state: unknown): void {
+  if (typeof vscode?.setState === 'function') vscode.setState(state);
 }
 
 declare global {

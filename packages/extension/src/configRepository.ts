@@ -168,7 +168,7 @@ export class ConfigRepository {
   }
 
   getInterval(): number {
-    return Math.max(this.readCompatible<number>('interval', 5000), 3000);
+    return Math.max(this.readCompatible<number>('interval', 15000), 3000);
   }
 
   getMarketHoursEnabled(): boolean {

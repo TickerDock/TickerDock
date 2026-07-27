@@ -48,7 +48,7 @@ export function App({ bootstrap }: { bootstrap: Bootstrap }): ReactElement {
     case 'stockExtendedDetail':
       return <StockExtendedDetailPage title={bootstrap.title} detail={bootstrap.detail} error={bootstrap.error} />;
     case 'marketSentiment':
-      return <MarketSentimentPage snapshot={bootstrap.snapshot} error={bootstrap.error} />;
+      return <MarketSentimentPage initialSnapshot={bootstrap.snapshot} initialLoadingSections={bootstrap.loadingSections} error={bootstrap.error} />;
     case 'fundComparison':
       return <FundComparisonPage series={bootstrap.series} failedCodes={bootstrap.failedCodes} controls={bootstrap.controls} active={bootstrap.active} error={bootstrap.error} />;
     case 'fundOverview':

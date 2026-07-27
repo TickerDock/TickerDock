@@ -1,16 +1,16 @@
-import { commands, env, ExtensionContext, QuickPickItem, Uri, window, workspace } from 'vscode';
+import { commands, ExtensionContext, QuickPickItem, Uri, window, workspace } from 'vscode';
 import {
   BinanceGateway,
   BocForexGateway,
   CompositeFlashNewsGateway,
   CompositeStockGateway,
-  EastMoneyFundEstimateGateway,
   EastMoneyFundInsightsGateway,
   EastMoneyMarketSentimentGateway,
   FundApiGateway,
   Jin10FlashNewsGateway,
   IwenCaiStockInsightsGateway,
   JiuyangongsheResearchGateway,
+  StockSdkFundEstimateGateway,
   XuanGuBaoFlashNewsGateway,
 } from '@tickerdock/data-sources';
 import { createCnyFxRates, FlashNewsGateway, fromStockApiCode, FundPosition, mergeFundEstimates, StockGateway, StockPosition, StockQuote, StockReminderRule, StockResearchGateway, StockIwenCaiGateway } from '@tickerdock/domain';
@@ -29,7 +29,6 @@ import { ReminderService } from './reminderService';
 import { showFundHistory, showSectorHistory, showStockHistory, showStockKline } from './historyView';
 import { CryptoProvider, CryptoTreeItem, ForexProvider } from './marketProviders';
 import { moveCode } from './orderUtils';
-import { FlashNewsProvider, FlashNewsTreeItem } from './newsProvider';
 import { showFundDetails, showFundFlows, showFundHoldings, showFundRanking } from './fundInsightsView';
 import { showLeekCenter, updateLeekCenterWatchlist } from './leekCenter';
 import { SecretRepository } from './secretRepository';
@@ -60,6 +59,7 @@ import { pickSearchResult } from './searchQuickPick';
 
 const DEFAULT_STOCKS = ['SH000001', 'SH000300', 'HK00700', 'USIXIC'];
 const DEFAULT_FUNDS = [['001632', '420009', '320007']];
+const BACKGROUND_REFRESH_INTERVAL_MS = 60_000;
 
 export async function activate(context: ExtensionContext): Promise<void> {
   context.subscriptions.push({ dispose: stopEastMoneyProxy });
@@ -68,7 +68,7 @@ export async function activate(context: ExtensionContext): Promise<void> {
   const secrets = new SecretRepository(context.secrets);
   const stockGateway = new CompositeStockGateway();
   const fundGateway = new FundApiGateway();
-  const fundEstimateGateway = new EastMoneyFundEstimateGateway();
+  const fundEstimateGateway = new StockSdkFundEstimateGateway();
   const binanceGateway = new BinanceGateway();
   const forexGateway = new BocForexGateway();
   const flashNewsGateway = new Jin10FlashNewsGateway();
@@ -90,7 +90,6 @@ export async function activate(context: ExtensionContext): Promise<void> {
   const reminderService = new ReminderService(config, context.globalState);
   const cryptoProvider = new CryptoProvider(config.getBinanceSortMode());
   const forexProvider = new ForexProvider();
-  const flashNewsProvider = new FlashNewsProvider();
   const sectorProvider = new SectorProvider();
   sectorProvider.setSectors(config.getSectors());
   const settingsProvider = new SettingsProvider();
@@ -98,6 +97,9 @@ export async function activate(context: ExtensionContext): Promise<void> {
   const aiOutput = new AiOutputService();
   const stockQuoteCache = new Map<string, StockQuote>();
   const stockTree = window.createTreeView('tickerdock.stock', { treeDataProvider: stockProvider });
+  const fundTree = window.createTreeView('tickerdock.fund', { treeDataProvider: fundProvider });
+  const cryptoTree = window.createTreeView('tickerdock.binance', { treeDataProvider: cryptoProvider });
+  const forexTree = window.createTreeView('tickerdock.forex', { treeDataProvider: forexProvider });
   if (!context.globalState.get<boolean>('portfolioVisibilitySemanticsV2', false)) {
     void config.repairLegacyFundPortfolioVisibility()
       .then(async () => {
@@ -127,10 +129,9 @@ export async function activate(context: ExtensionContext): Promise<void> {
     newsOutput,
     aiOutput,
     stockTree,
-    window.createTreeView('tickerdock.fund', { treeDataProvider: fundProvider }),
-    window.createTreeView('tickerdock.binance', { treeDataProvider: cryptoProvider }),
-    window.createTreeView('tickerdock.forex', { treeDataProvider: forexProvider }),
-    window.createTreeView('tickerdock.news', { treeDataProvider: flashNewsProvider }),
+    fundTree,
+    cryptoTree,
+    forexTree,
     window.createTreeView('tickerdock.sector', { treeDataProvider: sectorProvider }),
     window.createTreeView('tickerdock.settings', { treeDataProvider: settingsProvider })
   );
@@ -138,25 +139,36 @@ export async function activate(context: ExtensionContext): Promise<void> {
   const refreshStocks = async (reason: RefreshReason) => {
     const groups = config.getStockGroups(DEFAULT_STOCKS);
     const codes = [...new Set(groups.flatMap(({ codes: values }) => values))];
-    const automatic = reason === 'scheduled' && config.getMarketHoursEnabled();
-    const fetchCodes = automatic
-      ? codes.filter((code) => {
-          const market = marketForStockCode(code);
-          return market === undefined || isMarketOpen(market);
-        })
+    const requestedCodes = reason !== 'manual' && !stockTree.visible
+      ? backgroundStockCodes(config, codes)
       : codes;
+    const automatic = reason === 'scheduled' && config.getMarketHoursEnabled();
+    const marketOpen = new Map<NonNullable<ReturnType<typeof marketForStockCode>>, boolean>();
+    const fetchCodes = automatic
+      ? requestedCodes.filter((code) => {
+          const market = marketForStockCode(code);
+          if (market === undefined) return true;
+          const cached = marketOpen.get(market);
+          if (cached !== undefined) return cached;
+          const open = isMarketOpen(market);
+          marketOpen.set(market, open);
+          return open;
+        })
+      : requestedCodes;
     if (fetchCodes.length === 0) {
-      stockQuoteCache.clear();
-      marketStatusBar.updateQuotes([]);
-      portfolioBar.updateStocks(stockProvider.setData(groups, [], config.getStockPositions()));
-      void updateLeekCenterWatchlist(getLeekCenterWatchlist());
+      if (!automatic && codes.length === 0) {
+        stockQuoteCache.clear();
+        marketStatusBar.updateQuotes([]);
+        portfolioBar.updateStocks(stockProvider.setData(groups, [], config.getStockPositions()));
+      }
       return;
     }
     try {
       const refreshed = await stockGateway.getQuotes(fetchCodes);
       refreshed.forEach((quote) => stockQuoteCache.set(quote.code, quote));
+      const watchedCodes = new Set(codes);
       for (const code of stockQuoteCache.keys()) {
-        if (!codes.includes(code)) stockQuoteCache.delete(code);
+        if (!watchedCodes.has(code)) stockQuoteCache.delete(code);
       }
       const quotes = codes.flatMap((code) => {
         const quote = stockQuoteCache.get(code);
@@ -164,12 +176,8 @@ export async function activate(context: ExtensionContext): Promise<void> {
       });
       marketStatusBar.updateQuotes(quotes);
       const profits = stockProvider.setData(groups, quotes, config.getStockPositions());
-      portfolioBar.setVisibility(
-        config.getShowStockPortfolioStatusBar(),
-        config.getShowFundPortfolioStatusBar()
-      );
       portfolioBar.updateStocks(profits);
-      void updateLeekCenterWatchlist(getLeekCenterWatchlist());
+      void updateLeekCenterWatchlist(getLeekCenterWatchlist);
       await reminderService.process(quotes);
     } catch (error) {
       console.error('[tickerdock] Stock refresh failed', error);
@@ -180,19 +188,23 @@ export async function activate(context: ExtensionContext): Promise<void> {
     if (reason === 'scheduled' && config.getMarketHoursEnabled() && !isMarketOpen('fund')) return;
     const groups = config.getFundGroups(DEFAULT_FUNDS);
     const codes = [...new Set(groups.flatMap(({ codes: values }) => values))];
+    const fundPositions = config.getFundPositions();
+    const requestedCodes = reason !== 'manual' && !fundTree.visible
+      ? codes.filter((code) => fundPositions.has(code))
+      : codes;
+    if (requestedCodes.length === 0) {
+      if (codes.length === 0) portfolioBar.updateFunds(fundProvider.setData(groups, [], fundPositions));
+      return;
+    }
     try {
       const [quotes, estimates] = await Promise.all([
-        fundGateway.getQuotes(codes),
-        fundEstimateGateway.getEstimates(codes),
+        fundGateway.getQuotes(requestedCodes),
+        fundEstimateGateway.getEstimates(requestedCodes),
       ]);
       const mergedQuotes = mergeFundEstimates(quotes, estimates);
-      const profits = fundProvider.setData(groups, mergedQuotes, config.getFundPositions());
-      portfolioBar.setVisibility(
-        config.getShowStockPortfolioStatusBar(),
-        config.getShowFundPortfolioStatusBar()
-      );
+      const profits = fundProvider.setData(groups, mergedQuotes, fundPositions);
       portfolioBar.updateFunds(profits);
-      void updateLeekCenterWatchlist(getLeekCenterWatchlist());
+      void updateLeekCenterWatchlist(getLeekCenterWatchlist);
     } catch (error) {
       console.error('[tickerdock] Fund refresh failed', error);
     }
@@ -219,13 +231,55 @@ export async function activate(context: ExtensionContext): Promise<void> {
   const newsRefresh = new RefreshController(config.getNewsInterval(), async () => {
     try {
       const news = await createNewsGateway().getLatest(60);
-      flashNewsProvider.setNews(news, config.getImportantNewsOnly());
-      newsOutput.process(news);
+      newsOutput.process(config.getImportantNewsOnly() ? news.filter((item) => item.important) : news);
     } catch (error) {
       console.error('[tickerdock] Flash news refresh failed', error);
     }
   });
   context.subscriptions.push(stockRefresh, fundRefresh, cryptoRefresh, forexRefresh, newsRefresh);
+  context.subscriptions.push(newsOutput.onDidChangeOpen((open) => {
+    if (open) newsRefresh.start();
+    else newsRefresh.stop();
+  }));
+  const syncRefreshScheduling = () => {
+    const stockPositions = config.getStockPositions();
+    const hasStockReminders = config.getRemindersEnabled()
+      && [...config.getStockReminders().values()].some((rules) => rules.length > 0);
+    const stockBackgroundNeeded = (config.getShowMarketStatusBar()
+        && config.getStatusBarStocks(['SH000001']).length > 0)
+      || (config.getShowStockPortfolioStatusBar() && stockPositions.size > 0)
+      || hasStockReminders;
+    scheduleForVisibility(
+      stockRefresh,
+      stockTree.visible || stockBackgroundNeeded,
+      stockTree.visible ? config.getInterval() : Math.max(config.getInterval(), BACKGROUND_REFRESH_INTERVAL_MS)
+    );
+
+    const fundBackgroundNeeded = config.getShowFundPortfolioStatusBar() && config.getFundPositions().size > 0;
+    scheduleForVisibility(
+      fundRefresh,
+      fundTree.visible || fundBackgroundNeeded,
+      fundTree.visible ? config.getInterval() : Math.max(config.getInterval(), BACKGROUND_REFRESH_INTERVAL_MS)
+    );
+    scheduleForVisibility(cryptoRefresh, cryptoTree.visible, config.getBinanceInterval());
+
+    const needsForeignRates = config.getShowStockPortfolioStatusBar()
+      && [...stockPositions.keys()].some((code) => {
+        const market = marketForStockCode(code);
+        return market === 'hk' || market === 'us' || market === 'global-future';
+      });
+    scheduleForVisibility(
+      forexRefresh,
+      forexTree.visible || needsForeignRates,
+      config.getForexInterval()
+    );
+  };
+  context.subscriptions.push(
+    stockTree.onDidChangeVisibility(syncRefreshScheduling),
+    fundTree.onDidChangeVisibility(syncRefreshScheduling),
+    cryptoTree.onDidChangeVisibility(syncRefreshScheduling),
+    forexTree.onDidChangeVisibility(syncRefreshScheduling)
+  );
 
   registerCommands(
     context, config, stockGateway, fundGateway,
@@ -266,20 +320,14 @@ export async function activate(context: ExtensionContext): Promise<void> {
     commands.registerCommand('tickerdock.openStockConnectFlow', () => openLeekCenter('northbound-flow')),
     commands.registerCommand('tickerdock.openMainCapitalFlow', () => openLeekCenter('main-capital-flow')),
     commands.registerCommand('tickerdock.viewMarketSentiment', () => showMarketSentiment(marketSentimentGateway, context.extensionUri)),
-    commands.registerCommand('tickerdock.refreshNews', () => newsRefresh.refreshNow()),
-    commands.registerCommand('tickerdock.showNewsOutput', async () => {
+    commands.registerCommand('tickerdock.showNewsOutput', () => {
       newsOutput.show();
-      await newsRefresh.refreshNow();
     }),
     commands.registerCommand('tickerdock.toggleNewsOutput', async () => {
       const enabled = !config.getFlashNewsOutputEnabled();
       await config.setFlashNewsOutputEnabled(enabled);
       newsOutput.setEnabled(enabled);
       void window.showInformationMessage(`Flash news output ${enabled ? 'enabled' : 'disabled'}.`);
-    }),
-    commands.registerCommand('tickerdock.openFlashNews', (item: FlashNewsTreeItem) => {
-      if (item.news.url) return env.openExternal(Uri.parse(item.news.url));
-      return undefined;
     }),
     commands.registerCommand('tickerdock.configureAi', () => configureAi(context.extensionUri, config, secrets)),
     commands.registerCommand('tickerdock.openSettings', () =>
@@ -372,10 +420,10 @@ export async function activate(context: ExtensionContext): Promise<void> {
       newsRefresh.updateInterval(config.getNewsInterval());
     }
     if (event.affectsConfiguration('tickerdock.importantNewsOnly')) {
-      void newsRefresh.refreshNow();
+      if (newsOutput.isOpen) void newsRefresh.refreshNow();
     }
     if (event.affectsConfiguration('tickerdock.newsSources')) {
-      void newsRefresh.refreshNow();
+      if (newsOutput.isOpen) void newsRefresh.refreshNow();
     }
     if (event.affectsConfiguration('tickerdock.flashNewsOutputEnabled')) {
       newsOutput.setEnabled(config.getFlashNewsOutputEnabled());
@@ -384,14 +432,28 @@ export async function activate(context: ExtensionContext): Promise<void> {
       newsOutput.setNotificationsEnabled(config.getFlashNewsNotificationsEnabled());
     }
     if (event.affectsConfiguration('tickerdock.sectors')) sectorProvider.setSectors(config.getSectors());
+    syncRefreshScheduling();
   }));
 
-  stockRefresh.start();
-  fundRefresh.start();
-  cryptoRefresh.start();
-  forexRefresh.start();
-  newsRefresh.start();
   updateStatusBarOptions(config, portfolioBar, marketStatusBar);
+  syncRefreshScheduling();
+}
+
+function scheduleForVisibility(controller: RefreshController, active: boolean, intervalMs: number): void {
+  controller.updateInterval(intervalMs);
+  if (active) controller.start();
+  else controller.stop();
+}
+
+function backgroundStockCodes(config: ConfigRepository, watchedCodes: readonly string[]): string[] {
+  const required = new Set(config.getStatusBarStocks(['SH000001']));
+  config.getStockPositions().forEach((_, code) => required.add(code));
+  if (config.getRemindersEnabled()) {
+    config.getStockReminders().forEach((rules, code) => {
+      if (rules.length > 0) required.add(code);
+    });
+  }
+  return watchedCodes.filter((code) => required.has(code));
 }
 
 function affectsAnyConfiguration(
@@ -566,7 +628,7 @@ function registerCommands(
   stockProvider: StockQuoteProvider,
   fundProvider: FundQuoteProvider,
   fundInsightsGateway: EastMoneyFundInsightsGateway,
-  fundEstimateGateway: EastMoneyFundEstimateGateway,
+  fundEstimateGateway: StockSdkFundEstimateGateway,
   stockResearchGateway: StockResearchGateway,
   iwencaiGateway: StockIwenCaiGateway,
   extensionUri: Uri,
