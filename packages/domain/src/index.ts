@@ -599,29 +599,32 @@ export class UnsupportedMarketError extends Error {
 }
 
 export function marketFromLegacyCode(code: string): Market {
-  const normalized = code.toLowerCase();
-  if (normalized.startsWith('sh')) return 'sh';
-  if (normalized.startsWith('sz')) return 'sz';
-  if (normalized.startsWith('bj')) return 'bj';
-  if (normalized.startsWith('hk')) return 'hk';
-  if (normalized.startsWith('usr_') || normalized.startsWith('gb_') || normalized.startsWith('us')) return 'us';
+  const normalized = code.trim().toUpperCase();
+  if (code.trim() !== normalized) throw new UnsupportedMarketError(code);
+  if (/^SH\d{6}$/.test(normalized)) return 'sh';
+  if (/^SZ\d{6}$/.test(normalized)) return 'sz';
+  // Hong Kong equities are five digits; HK market indices use symbols such
+  // as HKHSI and HKHSTECH. Both share the HK-prefixed canonical namespace.
+  if (/^HK[A-Z0-9]{3,12}$/.test(normalized)) return 'hk';
+  // US symbols use the canonical exchange-prefixed form (for example
+  // USAAPL, USDJI, USIXIC, USINX).  0DJI/0IXIC/0INX are UI filter keys,
+  // not requestable stock-api symbols, and therefore are intentionally
+  // rejected here.
+  if (/^US[A-Z0-9.^-]{1,20}$/.test(normalized)) return 'us';
+  if (/^HF[A-Z0-9]+$/.test(normalized)) return 'global-future';
   throw new UnsupportedMarketError(code);
 }
 
 export function toStockApiCode(code: string): string {
-  const normalized = code.trim();
-  const market = marketFromLegacyCode(normalized);
-  if (market === 'us') {
-    return `US${normalized.replace(/^(usr_|gb_|us)/i, '').toUpperCase()}`;
-  }
-  return `${market.toUpperCase()}${normalized.slice(market.length).toUpperCase()}`;
+  const normalized = code.trim().toUpperCase();
+  marketFromLegacyCode(normalized);
+  return normalized;
 }
 
 export function fromStockApiCode(code: string): string {
   const normalized = code.trim().toUpperCase();
-  if (normalized.startsWith('US')) return `usr_${normalized.slice(2).toLowerCase()}`;
-  if (/^(SH|SZ|BJ|HK)/.test(normalized)) return normalized.toLowerCase();
-  throw new UnsupportedMarketError(code);
+  marketFromLegacyCode(normalized);
+  return normalized;
 }
 
 function safeRatio(value: number, basis: number): number {

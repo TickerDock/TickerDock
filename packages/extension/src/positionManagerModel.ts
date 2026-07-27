@@ -1,4 +1,5 @@
 import { FundPosition, StockPosition } from '@stock-fund/domain';
+import { readWebviewEnvelope } from './webviewProtocol';
 
 export interface PositionManagerItem {
   code: string;
@@ -45,9 +46,10 @@ export function parseFundPositionSaveMessage(
 }
 
 function savePayload(message: unknown, command: string): Record<string, unknown>[] | undefined {
-  if (!isRecord(message) || message.command !== command) return undefined;
-  if (!Array.isArray(message.positions)) throw new Error('Position payload must be an array.');
-  return message.positions.map((item) => {
+  const payload = readWebviewEnvelope(message, command);
+  if (!payload) return undefined;
+  if (!Array.isArray(payload.positions)) throw new Error('Position payload must be an array.');
+  return payload.positions.map((item) => {
     if (!isRecord(item)) throw new Error('Each position must be an object.');
     return item;
   });

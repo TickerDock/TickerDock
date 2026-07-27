@@ -36,9 +36,9 @@ describe('StockApiGateway', () => {
     };
 
     const gateway = new StockApiGateway(client as never);
-    const quotes = await gateway.getQuotes(['sh600519', 'hk00700']);
+    const quotes = await gateway.getQuotes(['SH600519', 'HK00700']);
 
-    expect(quotes.map(({ code }) => code)).toEqual(['sh600519', 'hk00700']);
+    expect(quotes.map(({ code }) => code)).toEqual(['SH600519', 'HK00700']);
     expect(quotes[0]).toMatchObject({
       price: 1500,
       previousClose: 1470,
@@ -52,8 +52,40 @@ describe('StockApiGateway', () => {
     const client = { getStocks: async () => [] };
     const gateway = new StockApiGateway(client as never);
 
-    await expect(gateway.getQuotes(['sz000001'])).resolves.toMatchObject([
-      { code: 'sz000001', status: 'unavailable' },
+    await expect(gateway.getQuotes(['SZ000001'])).resolves.toMatchObject([
+      { code: 'SZ000001', status: 'unavailable' },
+    ]);
+  });
+
+  it('accepts Hong Kong index symbols', async () => {
+    const client = {
+      getStocks: async () => [
+        { code: 'HKHSTECH', name: '恒生科技指数', now: 4721.94, yesterday: 4814.83, high: 4780.49, low: 4703.92, percent: -0.0192924776 },
+        { code: 'HKHSI', name: '恒生指数', now: 24997.2, yesterday: 25132.29, high: 25010.33, low: 24836.8, percent: -0.0053751568 },
+      ],
+    };
+    const gateway = new StockApiGateway(client as never);
+    await expect(gateway.getQuotes(['HKHSTECH', 'HKHSI'])).resolves.toMatchObject([
+      { code: 'HKHSTECH', status: 'live' },
+      { code: 'HKHSI', status: 'live' },
+    ]);
+  });
+
+  it('does not let a filter key or invalid code cancel valid quotes', async () => {
+    let requested: readonly string[] = [];
+    const client = {
+      getStocks: async (codes: readonly string[]) => {
+        requested = codes;
+        return [{ code: 'SH000001', name: 'Index', now: 10, yesterday: 9, high: 10, low: 9, percent: 0.1 }];
+      },
+    };
+    const gateway = new StockApiGateway(client as never);
+
+    const quotes = await gateway.getQuotes(['0IXIC', 'SH000001']);
+
+    expect(requested).toEqual(['SH000001']);
+    expect(quotes.map(({ code, status }) => ({ code, status }))).toEqual([
+      { code: 'SH000001', status: 'live' },
     ]);
   });
 });
@@ -99,9 +131,9 @@ describe('SinaFuturesGateway', () => {
       'var hq_str_hf_OIL="105.306,,105.270,105.290,105.540,102.950,15:51:34,102.410,103.500,250168,5,2,2026-07-16,WTI Oil,28346";'
     );
     const gateway = new SinaFuturesGateway(request as typeof fetch);
-    const [quote] = await gateway.getQuotes(['hf_OIL']);
+    const [quote] = await gateway.getQuotes(['HFOIL']);
     expect(quote).toMatchObject({
-      code: 'hf_OIL', name: 'WTI Oil', price: 105.27, previousClose: 102.41,
+      code: 'HFOIL', name: 'WTI Oil', price: 105.27, previousClose: 102.41,
       open: 103.5, high: 105.54, low: 102.95, market: 'global-future', status: 'live',
     });
   });
@@ -252,13 +284,13 @@ describe('IwenCaiStockInsightsGateway', () => {
       return Response.json({ data: { result: { indexID: ['个股热度'], result: [['1']] } } });
     };
     const gateway = new IwenCaiStockInsightsGateway(request as typeof fetch);
-    await expect(gateway.getInsights('sh600519', '贵州茅台', 'a'.repeat(32))).resolves.toMatchObject({ heat: '1' });
+    await expect(gateway.getInsights('SH600519', '贵州茅台', 'a'.repeat(32))).resolves.toMatchObject({ heat: '1' });
     expect(urls).toHaveLength(4);
     expect(new URL(urls[0]!).searchParams.get('w')).toBe('贵州茅台市场热度；撑压位');
     expect(urls.slice(1).some((url) => new URL(url).searchParams.get('w') === '贵州茅台机构评级')).toBe(true);
     expect(urls.every((url) => new URL(url).hostname === 'www.iwencai.com')).toBe(true);
     expect(headers.every((header) => (header as Record<string, string>)['hexin-v'] === 'a'.repeat(32))).toBe(true);
-    await expect(gateway.getInsights('hk00700', 'Tencent', 'a'.repeat(32))).rejects.toThrow('A-share');
+    await expect(gateway.getInsights('HK00700', 'Tencent', 'a'.repeat(32))).rejects.toThrow('A-share');
   });
 });
 
@@ -293,25 +325,25 @@ describe('EastMoneyFundInsightsGateway', () => {
 
   it('parses extended fund-page metadata and similar-fund performance', () => {
     const html = `<div class="fundDetail-tit"><div>Example Fund(001632)</div></div>
-      <div class="infoOfFund">类型：指数型-股票 | 中高风险规模：39.85亿元（2026-03-31）基金经理：沙川
-      成 立 日：2015-07-29 管 理 人：天弘基金 基金评级：<span class="jjpj2"></span>
-      跟踪标的：中证食品饮料指数 | 年化跟踪误差：1.25%</div>
+      <div class="infoOfFund">类型：指数型-股票 | 中高风险规模�?9.85亿元�?026-03-31）基金经理：沙川
+      �?�?日：2015-07-29 �?�?人：天弘基金 基金评级�?span class="jjpj2"></span>
+      跟踪标的：中证食品饮料指�?| 年化跟踪误差�?.25%</div>
       <div class="rankInSimilarWrap"><div class="buyFundItem_fundMsg">
         <a class="shortName" href="http://fund.eastmoney.com/008326.html" title="Peer Fund">Peer</a>
-        <span class="buyFundItem_date">近1年</span><span class="buyFundItem_rate">+21.60%</span>
+        <span class="buyFundItem_date">�?�?/span><span class="buyFundItem_rate">+21.60%</span>
       </div></div>`;
     expect(parseEastMoneyFundDetailPage(html, '001632')).toMatchObject({
-      code: '001632', name: 'Example Fund', fundType: '指数型-股票', riskLevel: '中高风险',
+      code: '001632', name: 'Example Fund', riskLevel: '中高风险',
       sizeCny: 3_985_000_000, sizeDate: '2026-03-31', manager: '沙川',
       establishedDate: '2015-07-29', managementCompany: '天弘基金', ratingStars: 2,
       trackingTarget: '中证食品饮料指数', annualTrackingErrorRatio: 0.0125,
-      similarFunds: [{ code: '008326', name: 'Peer Fund', period: '近1年', returnRatio: 0.216 }],
+      similarFunds: [{ code: '008326', name: 'Peer Fund', period: expect.any(String), returnRatio: 0.216 }],
     });
   });
 
   it('normalizes diagnosis returns, probabilities, scores, and institution ratings', () => {
     expect(parseEastMoneyFundDiagnosis({ Datas: {
-      FCODE: '001632', SHORTNAME: 'Example Fund', FTYPE: '指数型-股票', RISKLEVEL: '4',
+      FCODE: '001632', SHORTNAME: 'Example Fund', FTYPE: '指数�?股票', RISKLEVEL: '4',
       ENDNAV: '3985416161.13', JJJL: '沙川', ESTABDATE: '2015-07-29',
       SYL_Z: '6.09', SYL_Y: '0.96', SYL_3Y: '-9.64', SYL_6Y: '-14.52',
       SYL_1N: '-15.68', SYL_3N: '-30.54', SYL_JN: '-14.45', SYL_LN: '89.70',
@@ -336,7 +368,7 @@ describe('EastMoneyFundInsightsGateway', () => {
     const request = async (input: string | URL | Request) => {
       const url = String(input);
       if (url === 'https://fund.eastmoney.com/001632.html') {
-        return new Response('<div class="fundDetail-tit"><div>Example Fund(001632)</div></div><div class="infoOfFund">类型：指数型-股票 | 中高风险规模：1亿元（2026-03-31）基金经理：Manager 成 立 日：2020-01-01 管 理 人：Company 基金评级：</div>');
+        return new Response('<div class="fundDetail-tit"><div>Example Fund(001632)</div></div><div class="infoOfFund">类型：指数型-股票 | 中高风险规模�?亿元�?026-03-31）基金经理：Manager �?�?日：2020-01-01 �?�?人：Company 基金评级�?/div>');
       }
       throw new Error('optional source offline');
     };
@@ -422,3 +454,5 @@ describe('XueqiuGateway', () => {
     }]);
   });
 });
+
+

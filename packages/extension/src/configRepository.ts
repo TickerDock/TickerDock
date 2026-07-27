@@ -50,7 +50,7 @@ export class ConfigRepository {
     await this.write('sectors', normalized);
   }
   getStocks(defaultValue: string[]): string[] {
-    return uniqueStrings(this.readCompatible<unknown>('stocks', defaultValue));
+    return uniqueStrings(this.readCompatible<unknown>('stocks', defaultValue)).map(normalizeConfiguredStockCode);
   }
 
   async setStocks(codes: readonly string[]): Promise<void> {
@@ -61,12 +61,13 @@ export class ConfigRepository {
     const current = workspace.getConfiguration('stock-fund');
     const lists = current.get<unknown>('stockLists');
     const legacyCodes = this.getStocks(defaultCodes);
-    return resolveStockWatchGroups(
+    const groups = resolveStockWatchGroups(
       current.get<unknown>('stockGroups'),
       lists,
       legacyCodes,
       hasExplicitValue(current.inspect<unknown>('stockLists'))
     );
+    return groups.map((group) => ({ ...group, codes: group.codes.map(normalizeConfiguredStockCode) }));
   }
 
   async setStockGroups(groups: readonly StockWatchGroup[]): Promise<void> {
@@ -98,7 +99,11 @@ export class ConfigRepository {
   }
 
   getStockPositions(): Map<string, StockPosition> {
-    return parseStockPositions(this.readCompatible<unknown>('stockPrice', {}));
+    const positions = parseStockPositions(this.readCompatible<unknown>('stockPrice', {}));
+    return new Map([...positions].map(([code, position]) => {
+      const normalized = normalizeConfiguredStockCode(code);
+      return [normalized, { ...position, code: normalized }];
+    }));
   }
 
   async setStockPosition(position: StockPosition): Promise<void> {
@@ -382,7 +387,8 @@ export class ConfigRepository {
 
   getStatusBarStocks(defaultValue: string[]): string[] {
     return uniqueStrings(this.readCompatible<unknown>('statusBarStocks',
-      workspace.getConfiguration('leek-fund').get<unknown>('statusBarStock', defaultValue))).slice(0, 8);
+      workspace.getConfiguration('leek-fund').get<unknown>('statusBarStock', defaultValue)))
+      .map(normalizeConfiguredStockCode).slice(0, 8);
   }
 
   async setStatusBarStocks(codes: readonly string[]): Promise<void> {
@@ -496,6 +502,23 @@ function hasExplicitValue<T>(inspected: {
 function uniqueStrings(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
   return [...new Set(value.filter((item): item is string => typeof item === 'string' && item.trim() !== ''))];
+}
+
+// Upgrade values written by the pre-prefix extension at the configuration
+// boundary. All runtime APIs and newly persisted values remain canonical.
+function normalizeConfiguredStockCode(value: string): string {
+  const code = value.trim();
+  const upper = code.toUpperCase();
+  const indexCode = { '0DJI': 'USDJI', '0IXIC': 'USIXIC', '0INX': 'USINX' }[upper];
+  if (indexCode) return indexCode;
+  if (/^(SH|SZ|HK|US|HF)\w+$/.test(upper)) return upper;
+  const match = /^(?:sh|sz|hk)(\d+)$/.exec(code);
+  if (match) return `${code.slice(0, 2).toUpperCase()}${match[1]}`;
+  const us = /^(?:usr_|gb_)([a-z0-9.^-]+)$/i.exec(code);
+  if (us?.[1]) return `US${us[1].toUpperCase()}`;
+  const future = /^(?:nf_|hf_)([a-z0-9]+)$/i.exec(code);
+  if (future?.[1]) return `HF${future[1].toUpperCase()}`;
+  return upper;
 }
 
 function stringArray(value: unknown): string[] {

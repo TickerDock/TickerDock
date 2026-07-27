@@ -1,26 +1,40 @@
-import { ProgressLocation, ViewColumn, window } from 'vscode';
-import { StockResearchGateway } from '@stock-fund/domain';
-import { renderStockResearchError, renderStockResearchPage } from './stockResearchPage';
-import { renderTrendLoading } from './trendPage';
+import { env, ProgressLocation, Uri, ViewColumn, window } from 'vscode';
+import { StockResearchGateway, StockResearchItem } from '@stock-fund/domain';
+import { readWebviewEnvelope, renderWebviewUi, webviewUiRoot } from './webviewUi';
 
 export async function showStockResearch(
   gateway: StockResearchGateway,
   query: string,
-  name: string
+  name: string,
+  extensionUri: Uri
 ): Promise<void> {
-  const title = `${name} Jiuyangongshe Research`;
+  const title = `${name} 研报`;
   const panel = window.createWebviewPanel('stockFundStockResearch', title, ViewColumn.One, {
-    enableScripts: false,
+    enableScripts: true,
     retainContextWhenHidden: false,
+    localResourceRoots: [webviewUiRoot(extensionUri)],
   });
-  panel.webview.html = renderTrendLoading(title);
+  panel.webview.html = renderWebviewUi(panel.webview, extensionUri, { page: 'stockResearch', name });
+  panel.webview.onDidReceiveMessage(async (message: unknown) => {
+    const payload = readWebviewEnvelope(message, 'openResearchUrl');
+    const url = payload && typeof payload.url === 'string' ? trustedResearchUrl(payload.url) : undefined;
+    if (url) await env.openExternal(Uri.parse(url));
+  });
+  let items: StockResearchItem[];
   try {
-    const items = await window.withProgress(
-      { location: ProgressLocation.Notification, title: `Loading ${name} research...` },
+    items = await window.withProgress(
+      { location: ProgressLocation.Notification, title: `正在加载 ${name} 研报...` },
       () => gateway.search(query, 15)
     );
-    panel.webview.html = renderStockResearchPage(name, items);
   } catch (error) {
-    panel.webview.html = renderStockResearchError(name, error);
+    items = [{
+      id: 'error', title: '研报暂不可用', summary: error instanceof Error ? error.message : String(error),
+      time: '', source: 'jiuyangongshe', url: 'https://www.jiuyangongshe.com/',
+    }];
   }
+  panel.webview.html = renderWebviewUi(panel.webview, extensionUri, { page: 'stockResearch', name, items });
+}
+
+function trustedResearchUrl(value: string): string | undefined {
+  return /^https:\/\/www\.jiuyangongshe\.com\/a\/[a-zA-Z0-9_-]+$/.test(value) ? value : undefined;
 }

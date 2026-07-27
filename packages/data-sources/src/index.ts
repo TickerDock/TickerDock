@@ -48,19 +48,29 @@ export class StockApiGateway implements StockGateway {
   constructor(private readonly client: StockApiClient = stocks.auto) {}
 
   async getQuotes(codes: readonly string[]): Promise<StockQuote[]> {
-    const supported = codes.map((legacyCode) => ({ legacyCode, apiCode: toStockApiCode(legacyCode) }));
+    const supported = codes.flatMap((canonicalCode) => {
+      try {
+        return [{ canonicalCode, apiCode: toStockApiCode(canonicalCode) }];
+      } catch {
+        return [];
+      }
+    });
     const response = await this.client.getStocks(supported.map(({ apiCode }) => apiCode));
     const byCode = new Map(response.map((quote) => [quote.code.toUpperCase(), quote]));
+    const supportedByCode = new Map(supported.map((item) => [item.canonicalCode, item]));
 
-    return supported.map(({ legacyCode, apiCode }) => {
+    return codes.flatMap((canonicalCode) => {
+      const supportedItem = supportedByCode.get(canonicalCode);
+      if (!supportedItem) return [];
+      const { apiCode } = supportedItem;
       const quote = byCode.get(apiCode.toUpperCase());
       if (!quote) {
-        return unavailableStock(legacyCode);
+        return [unavailableStock(canonicalCode)];
       }
-      return {
-        code: legacyCode,
-        name: quote.name || legacyCode,
-        market: marketFromLegacyCode(legacyCode),
+      return [{
+        code: canonicalCode,
+        name: quote.name || canonicalCode,
+        market: marketFromLegacyCode(canonicalCode),
         price: quote.now,
         previousClose: quote.yesterday,
         high: quote.high,
@@ -69,7 +79,7 @@ export class StockApiGateway implements StockGateway {
         changeRatio: quote.percent,
         source: quote.source ?? 'stock-api',
         status: quote.name || quote.now ? 'live' : 'unavailable',
-      };
+      }];
     });
   }
 
@@ -82,7 +92,9 @@ export class StockApiGateway implements StockGateway {
     code: string,
     options?: { period?: 'day' | 'week' | 'month'; count?: number; adjust?: 'none' | 'qfq' | 'hfq' }
   ): Promise<Kline[]> {
-    return this.client.getKlines(toStockApiCode(code), options);
+    const apiCode = toStockApiCode(code);
+    const indexCode = ({ USDJI: 'US.DJI', USIXIC: 'US.IXIC', USINX: 'US.INX' } as const)[apiCode as 'USDJI' | 'USIXIC' | 'USINX'];
+    return this.client.getKlines(indexCode ?? apiCode, indexCode ? { ...options, adjust: 'none' } : options);
   }
 }
 
@@ -123,7 +135,8 @@ export class SinaFuturesGateway implements StockGateway {
 
   async getQuotes(codes: readonly string[]): Promise<StockQuote[]> {
     if (codes.length === 0) return [];
-    const response = await this.request(`https://hq.sinajs.cn/list=${codes.join(',')}`, {
+    const apiCodes = codes.map((code) => code.startsWith('HF') ? `hf_${code.slice(2)}` : code);
+    const response = await this.request(`https://hq.sinajs.cn/list=${apiCodes.join(',')}`, {
       headers: { Referer: 'https://finance.sina.com.cn/' },
       signal: AbortSignal.timeout(8000),
     });
@@ -132,7 +145,7 @@ export class SinaFuturesGateway implements StockGateway {
     const body = new TextDecoder('gb18030').decode(bytes);
     const parsed = new Map<string, StockQuote>();
     for (const matched of body.matchAll(/var hq_str_([^=]+)="([^"]*)"/g)) {
-      const code = matched[1];
+      const code = matched[1]?.replace(/^hf_/i, 'HF');
       const payload = matched[2];
       if (!code || !payload) continue;
       const quote = parseFutureQuote(code, payload.split(','));
@@ -1066,7 +1079,7 @@ function unavailableStock(code: string): StockQuote {
 }
 
 function parseFutureQuote(code: string, fields: string[]): StockQuote | undefined {
-  if (code.startsWith('hf_')) {
+  if (code.startsWith('HF')) {
     const current = number(fields[0]);
     const bid = number(fields[2]);
     const ask = number(fields[3]);
@@ -1074,7 +1087,7 @@ function parseFutureQuote(code: string, fields: string[]): StockQuote | undefine
     return createFutureQuote(code, fields[13] || code, price, number(fields[7]), number(fields[8]), number(fields[4]), number(fields[5]), 'global-future');
   }
 
-  const isIndex = /^nf_(IC|IF|IH|IM|TF|TS|T\d|TL)/.test(code);
+  const isIndex = /^HF(?:IC|IF|IH|IM|TF|TS|T\d|TL)/.test(code);
   if (isIndex) {
     return createFutureQuote(code, fields[49] || code, number(fields[3]), number(fields[13]), number(fields[0]), number(fields[1]), number(fields[2]), 'cn-future');
   }
@@ -1113,7 +1126,7 @@ function unavailableFuture(code: string): StockQuote {
   return {
     code,
     name: code,
-    market: code.startsWith('hf_') ? 'global-future' : 'cn-future',
+    market: code.startsWith('HF') ? 'global-future' : 'cn-future',
     price: 0,
     previousClose: 0,
     high: 0,
@@ -1146,7 +1159,7 @@ function record(value: unknown): Record<string, unknown> | undefined {
 }
 
 function isFutureCode(code: string): boolean {
-  return /^(nf_|hf_)/i.test(code);
+  return /^HF[A-Z0-9]+$/i.test(code);
 }
 
 function normalizePair(symbol: string): { api: string; display: string; base: string; quote: string } {

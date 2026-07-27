@@ -1,0 +1,18 @@
+import type { ReactElement } from 'react';
+import { EChart } from '../components/EChart';
+import { postMessage, type FundNav, type TrendControl } from '../protocol';
+
+export function FundTrendPage({ title, data, controls, active, error }: { title: string; data?: FundNav[]; controls: TrendControl[]; active: string; error?: string }): ReactElement {
+  const ordered = [...(data ?? [])].sort((a, b) => a.date.localeCompare(b.date));
+  return <main className="trend-page"><header className="trend-head"><h1>{title}</h1><nav className="segments" aria-label="走势区间">{controls.map((control) => <button type="button" key={control.id} aria-pressed={control.id === active} onClick={() => postMessage('changeFundTrendRange', { range: control.id })}>{control.label}</button>)}</nav></header>{!data && !error ? <p className="empty">正在加载走势数据...</p> : error ? <p className="empty">{error}</p> : ordered.length ? <TrendContent data={ordered} /> : <p className="empty">暂无净值走势数据。</p>}</main>;
+}
+
+function TrendContent({ data }: { data: FundNav[] }): ReactElement {
+  const summary = trendSummary(data.map(({ nav }) => nav)); const points = downsample(data, 500);
+  return <>{summary && <dl className="trend-summary"><Metric label="最新" value={formatNumber(summary.latest)} /><Metric label="区间涨跌" value={formatPercent(summary.changeRatio)} className={summary.changeRatio >= 0 ? 'up-text' : 'down-text'} /><Metric label="最高" value={formatNumber(summary.high)} /><Metric label="最低" value={formatNumber(summary.low)} /><Metric label="样本数" value={String(data.length)} /></dl>}<section className="chart-wrap"><EChart className="trend-echart" label="基金净值走势" option={{ animation: false, tooltip: { trigger: 'axis' }, legend: { data: ['单位净值', '累计净值'], top: 4 }, grid: { left: 58, right: 24, top: 48, bottom: 64 }, xAxis: { type: 'category', boundaryGap: false, data: points.map(({ date }) => date), axisLabel: { hideOverlap: true } }, yAxis: { type: 'value', scale: true }, dataZoom: [{ type: 'inside' }, { type: 'slider', height: 18, bottom: 12 }], series: [{ name: '单位净值', type: 'line', showSymbol: false, sampling: 'lttb', data: points.map(({ nav }) => nav) }, { name: '累计净值', type: 'line', showSymbol: false, sampling: 'lttb', data: points.map(({ accumulatedNav }) => accumulatedNav) }] }} /></section><section className="table-wrap"><table className="trend-table"><thead><tr><th>日期</th><th>单位净值</th><th>累计净值</th><th>来源</th></tr></thead><tbody>{[...data].reverse().slice(0, 60).map((item) => <tr key={item.date}><td>{item.date}</td><td>{formatNumber(item.nav)}</td><td>{formatNumber(item.accumulatedNav)}</td><td>{item.source}</td></tr>)}</tbody></table></section></>;
+}
+function Metric({ label, value, className = '' }: { label: string; value: string; className?: string }): ReactElement { return <div><dt>{label}</dt><dd className={className}>{value}</dd></div>; }
+function trendSummary(values: number[]): { latest: number; high: number; low: number; changeRatio: number } | undefined { const finite = values.filter(Number.isFinite); if (!finite.length) return undefined; const first = finite[0]!; const latest = finite.at(-1)!; return { latest, high: Math.max(...finite), low: Math.min(...finite), changeRatio: first === 0 ? 0 : (latest - first) / first }; }
+function downsample<T>(items: T[], maximum: number): T[] { if (items.length <= maximum) return items; const step = (items.length - 1) / (maximum - 1); return Array.from({ length: maximum }, (_, index) => items[Math.round(index * step)]!); }
+function formatNumber(value: number): string { return value >= 1000 ? value.toFixed(2) : value.toFixed(4).replace(/0+$/, '').replace(/\.$/, ''); }
+function formatPercent(value: number): string { return `${value >= 0 ? '+' : ''}${(value * 100).toFixed(2)}%`; }

@@ -21,12 +21,11 @@ const HOLIDAYS: Partial<Record<ScheduledMarket, ReadonlySet<string>>> = {
 };
 
 export function marketForStockCode(code: string): ScheduledMarket | undefined {
-  const normalized = code.toLowerCase();
-  if (/^(sh|sz|bj)/.test(normalized)) return 'cn';
-  if (normalized.startsWith('hk')) return 'hk';
-  if (/^(usr_|gb_|us)/.test(normalized)) return 'us';
-  if (normalized.startsWith('nf_')) return 'cn-future';
-  if (normalized.startsWith('hf_')) return 'global-future';
+  const normalized = code.toUpperCase();
+  if (/^(SH|SZ)/.test(normalized)) return 'cn';
+  if (normalized.startsWith('HK')) return 'hk';
+  if (/^(US|0(?:DJI|IXIC|INX))/.test(normalized)) return 'us';
+  if (normalized.startsWith('HF')) return 'global-future';
   return undefined;
 }
 

@@ -1,10 +1,7 @@
-import { randomBytes } from 'node:crypto';
 import { Uri, ViewColumn, window } from 'vscode';
 import { FundGateway } from '@stock-fund/domain';
 import { filterFundNavRange, FundTrendRange } from './trendModel';
-import { FundComparisonSeries, renderFundComparisonPage } from './fundComparisonPage';
-import { renderTrendError, renderTrendLoading } from './trendPage';
-import { chartResources } from './chartResources';
+import { readWebviewEnvelope, renderWebviewUi, webviewUiRoot } from './webviewUi';
 
 const CONTROLS = [
   { id: '1m', label: '1M' }, { id: '3m', label: '3M' }, { id: '6m', label: '6M' },
@@ -19,11 +16,11 @@ export async function showFundComparison(
   const panel = window.createWebviewPanel('stockFundComparison', 'Fund Performance Comparison', ViewColumn.One, {
     enableScripts: true,
     retainContextWhenHidden: false,
-    localResourceRoots: [Uri.joinPath(extensionUri, 'dist')],
+    localResourceRoots: [webviewUiRoot(extensionUri)],
   });
   let disposed = false;
   panel.onDidDispose(() => { disposed = true; });
-  panel.webview.html = renderTrendLoading('Fund Performance Comparison');
+  panel.webview.html = renderWebviewUi(panel.webview, extensionUri, { page: 'fundComparison', failedCodes: [], controls: CONTROLS, active: '1y' });
 
   try {
     const results = await Promise.allSettled(funds.map(async (fund) => ({
@@ -37,26 +34,18 @@ export async function showFundComparison(
     );
     const render = (range: FundTrendRange) => {
       if (disposed) return;
-      const filtered: FundComparisonSeries[] = series.map((item) => ({
+      const filtered = series.map((item) => ({
         ...item,
         data: filterFundNavRange(item.data, range),
       }));
-      panel.webview.html = renderFundComparisonPage(filtered, failedCodes, CONTROLS, range, nonce(), chartResources(panel.webview, extensionUri));
+      panel.webview.html = renderWebviewUi(panel.webview, extensionUri, { page: 'fundComparison', series: filtered, failedCodes, controls: CONTROLS, active: range });
     };
     panel.webview.onDidReceiveMessage((message: unknown) => {
-      if (!message || typeof message !== 'object') return;
-      const value = message as Record<string, unknown>;
-      if (value.command === 'changeRange' && typeof value.range === 'string'
-        && CONTROLS.some(({ id }) => id === value.range)) {
-        render(value.range as FundTrendRange);
-      }
+      const payload = readWebviewEnvelope(message, 'changeFundComparisonRange');
+      if (typeof payload?.range === 'string' && CONTROLS.some(({ id }) => id === payload.range)) render(payload.range as FundTrendRange);
     });
     render('1y');
   } catch (error) {
-    if (!disposed) panel.webview.html = renderTrendError('Fund comparison unavailable', error);
+    if (!disposed) panel.webview.html = renderWebviewUi(panel.webview, extensionUri, { page: 'fundComparison', failedCodes: [], controls: CONTROLS, active: '1y', error: error instanceof Error ? error.message : String(error) });
   }
-}
-
-function nonce(): string {
-  return randomBytes(18).toString('base64url');
 }

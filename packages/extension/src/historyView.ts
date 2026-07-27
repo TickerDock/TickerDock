@@ -1,23 +1,14 @@
-import { randomBytes } from 'node:crypto';
 import { Disposable, Uri, ViewColumn, WebviewPanel, window } from 'vscode';
-import { CryptoGateway, FundGateway, FundNav } from '@stock-fund/domain';
+import { FundGateway, FundNav, Kline, StockGateway } from '@stock-fund/domain';
 import { filterFundNavRange, FundTrendRange } from './trendModel';
-import {
-  renderCandleTrendPage,
-  renderFundTrendPage,
-  renderTrendError,
-  renderTrendLoading,
-  TrendControl,
-} from './trendPage';
+import { readWebviewEnvelope, renderWebviewUi, webviewUiRoot } from './webviewUi';
 import {
   buildStockIframeTargets,
-  renderStockIframePage,
   StockChartMode,
 } from './stockIframePage';
 import { getEastMoneyProxy } from './eastMoneyProxy';
-import { chartResources } from './chartResources';
 
-type CryptoPeriod = '1h' | '4h' | '1d' | '1w';
+interface TrendControl { id: string; label: string }
 
 const FUND_CONTROLS: readonly TrendControl[] = [
   { id: '1m', label: '1M' },
@@ -26,11 +17,10 @@ const FUND_CONTROLS: readonly TrendControl[] = [
   { id: '1y', label: '1Y' },
   { id: 'all', label: 'All' },
 ];
-const CRYPTO_CONTROLS: readonly TrendControl[] = [
-  { id: '1h', label: '1H' },
-  { id: '4h', label: '4H' },
-  { id: '1d', label: '1D' },
-  { id: '1w', label: '1W' },
+const STOCK_KLINE_CONTROLS: readonly TrendControl[] = [
+  { id: 'day', label: '\u65e5K' },
+  { id: 'week', label: '\u5468K' },
+  { id: 'month', label: '\u6708K' },
 ];
 
 let stockPanel: WebviewPanel | undefined;
@@ -38,22 +28,53 @@ let stockMessages: Disposable | undefined;
 let fundPanel: WebviewPanel | undefined;
 let fundMessages: Disposable | undefined;
 let fundRequestVersion = 0;
+let klinePanel: WebviewPanel | undefined;
+let klineMessages: Disposable | undefined;
+let klineRequestVersion = 0;
 
 export async function showStockHistory(
+  extensionUri: Uri,
   code: string,
   name = code,
   initialMode: StockChartMode = 'standard',
-  onModeChange?: (mode: StockChartMode) => void | Promise<void>
+  onModeChange?: (mode: StockChartMode) => void | Promise<void>,
+  stockGateway?: StockGateway
 ): Promise<void> {
   const title = `${name} Stock Trend`;
-  return showMarketHistory(code, title, initialMode, onModeChange);
+  if (stockGateway && isIndexStock(code, name)) return showStockKline(stockGateway, extensionUri, code, name);
+  return showMarketHistory(extensionUri, code, title, initialMode, onModeChange);
 }
 
-export async function showSectorHistory(code: string, name = code): Promise<void> {
-  return showMarketHistory(code, `${name} 板块详情`, 'standard');
+export async function showStockKline(stockGateway: StockGateway, extensionUri: Uri, code: string, name = code): Promise<void> {
+  const title = `${name} K\u7ebf`;
+  const panel = acquireKlinePanel(title, extensionUri);
+  const requestVersion = ++klineRequestVersion;
+  klineMessages?.dispose();
+  let period: 'day' | 'week' | 'month' = 'day';
+  const active = () => klinePanel === panel && requestVersion === klineRequestVersion;
+  const render = (data?: Kline[], error?: string) => {
+    if (active()) panel.webview.html = renderWebviewUi(panel.webview, extensionUri, { page: 'stockKline', title, code, data, controls: STOCK_KLINE_CONTROLS, active: period, error });
+  };
+  const load = async () => {
+    render();
+    try { render(await stockGateway.getKlines(code, { period, count: 240, adjust: 'none' })); }
+    catch (error) { render(undefined, error instanceof Error ? error.message : String(error)); }
+  };
+  klineMessages = panel.webview.onDidReceiveMessage((message: unknown) => {
+    const payload = readWebviewEnvelope(message, 'changeStockKlinePeriod');
+    if (payload?.period !== 'day' && payload?.period !== 'week' && payload?.period !== 'month') return;
+    period = payload.period;
+    void load();
+  });
+  await load();
+}
+
+export async function showSectorHistory(extensionUri: Uri, code: string, name = code): Promise<void> {
+  return showMarketHistory(extensionUri, code, `${name} 板块详情`, 'standard');
 }
 
 async function showMarketHistory(
+  extensionUri: Uri,
   code: string,
   title: string,
   initialMode: StockChartMode,
@@ -64,13 +85,14 @@ async function showMarketHistory(
   stockMessages = undefined;
   try {
     const proxy = await getEastMoneyProxy();
-    const panel = acquireStockPanel(title, proxy.port);
+    const panel = acquireStockPanel(title, extensionUri, proxy.port);
     currentPanel = panel;
     const targets = buildStockIframeTargets(code, proxy.origin);
     let mode: StockChartMode = initialMode === 'chips' && targets.chips ? 'chips' : 'standard';
-    const render = () => { panel.webview.html = renderStockIframePage(title, targets, mode, nonce()); };
+    const render = () => { panel.webview.html = renderWebviewUi(panel.webview, extensionUri, { page: 'stockMarketFrame', title, targets, mode }); };
     stockMessages = panel.webview.onDidReceiveMessage((message: unknown) => {
-      const requested = readStockChartMode(message);
+      const payload = readWebviewEnvelope(message, 'changeStockChartMode');
+      const requested = payload?.mode === 'standard' || payload?.mode === 'chips' ? payload.mode : undefined;
       if (!requested || (requested === 'chips' && !targets.chips)) return;
       mode = requested;
       render();
@@ -78,8 +100,8 @@ async function showMarketHistory(
     });
     render();
   } catch (error) {
-    const panel = currentPanel ?? acquireStockPanel(title);
-    panel.webview.html = renderTrendError(title, error);
+    const panel = currentPanel ?? acquireStockPanel(title, extensionUri);
+    panel.webview.html = renderWebviewUi(panel.webview, extensionUri, { page: 'stockMarketFrame', title, mode: 'standard', error: error instanceof Error ? error.message : String(error) });
   }
 }
 
@@ -98,56 +120,20 @@ export async function showFundHistory(
   const active = () => fundPanel === panel && requestVersion === fundRequestVersion;
   const render = (range: FundTrendRange) => {
     if (active() && data) {
-      panel.webview.html = renderFundTrendPage(
-        title,
-        filterFundNavRange(data, range),
-        FUND_CONTROLS,
-        range,
-        nonce(),
-        chartResources(panel.webview, extensionUri)
-      );
+      panel.webview.html = renderWebviewUi(panel.webview, extensionUri, { page: 'fundTrend', title, data: filterFundNavRange(data, range), controls: FUND_CONTROLS, active: range });
     }
   };
   fundMessages = panel.webview.onDidReceiveMessage((message: unknown) => {
-    const period = readPeriod(message);
-    if (isControl(period, FUND_CONTROLS)) render(period as FundTrendRange);
+    const payload = readWebviewEnvelope(message, 'changeFundTrendRange');
+    if (typeof payload?.range === 'string' && isControl(payload.range, FUND_CONTROLS)) render(payload.range as FundTrendRange);
   });
-  panel.webview.html = renderTrendLoading(title);
+  panel.webview.html = renderWebviewUi(panel.webview, extensionUri, { page: 'fundTrend', title, controls: FUND_CONTROLS, active: '1y' });
   try {
     data = await gateway.getNavHistory(code);
     render('1y');
   } catch (error) {
-    if (active()) panel.webview.html = renderTrendError(title, error);
+    if (active()) panel.webview.html = renderWebviewUi(panel.webview, extensionUri, { page: 'fundTrend', title, controls: FUND_CONTROLS, active: '1y', error: error instanceof Error ? error.message : String(error) });
   }
-}
-
-export async function showCryptoHistory(
-  gateway: CryptoGateway,
-  symbol: string,
-  name = symbol
-): Promise<void> {
-  const title = `${name} Binance Trend`;
-  const panel = createPanel('stockFundCryptoTrend', title);
-  let requestVersion = 0;
-  let disposed = false;
-  panel.onDidDispose(() => { disposed = true; });
-
-  const load = async (period: CryptoPeriod) => {
-    const version = ++requestVersion;
-    panel.webview.html = renderTrendLoading(title);
-    try {
-      const data = await gateway.getKlines(symbol, { interval: period, limit: 120 });
-      if (disposed || version !== requestVersion) return;
-      panel.webview.html = renderCandleTrendPage(title, data, CRYPTO_CONTROLS, period, nonce());
-    } catch (error) {
-      if (!disposed && version === requestVersion) panel.webview.html = renderTrendError(title, error);
-    }
-  };
-  panel.webview.onDidReceiveMessage((message: unknown) => {
-    const period = readPeriod(message);
-    if (isControl(period, CRYPTO_CONTROLS)) void load(period as CryptoPeriod);
-  });
-  await load('1d');
 }
 
 function createPanel(viewType: string, title: string, localPort?: number, localRoot?: Uri): WebviewPanel {
@@ -161,13 +147,13 @@ function createPanel(viewType: string, title: string, localPort?: number, localR
   });
 }
 
-function acquireStockPanel(title: string, localPort?: number): WebviewPanel {
+function acquireStockPanel(title: string, extensionUri: Uri, localPort?: number): WebviewPanel {
   if (stockPanel) {
     stockPanel.title = title;
     stockPanel.reveal(ViewColumn.One);
     return stockPanel;
   }
-  const panel = createPanel('stockFundStockTrend', title, localPort);
+  const panel = createPanel('stockFundStockTrend', title, localPort, webviewUiRoot(extensionUri));
   stockPanel = panel;
   panel.onDidDispose(() => {
     if (stockPanel !== panel) return;
@@ -184,7 +170,7 @@ function acquireFundPanel(title: string, extensionUri: Uri): WebviewPanel {
     fundPanel.reveal(ViewColumn.One);
     return fundPanel;
   }
-  const panel = createPanel('stockFundFundTrend', title, undefined, Uri.joinPath(extensionUri, 'dist'));
+  const panel = createPanel('stockFundFundTrend', title, undefined, webviewUiRoot(extensionUri));
   fundPanel = panel;
   panel.onDidDispose(() => {
     if (fundPanel !== panel) return;
@@ -196,23 +182,26 @@ function acquireFundPanel(title: string, extensionUri: Uri): WebviewPanel {
   return panel;
 }
 
-function readPeriod(message: unknown): string | undefined {
-  if (!message || typeof message !== 'object') return undefined;
-  const value = message as Record<string, unknown>;
-  return value.command === 'changePeriod' && typeof value.period === 'string' ? value.period : undefined;
+function acquireKlinePanel(title: string, extensionUri: Uri): WebviewPanel {
+  if (klinePanel) { klinePanel.title = title; klinePanel.reveal(ViewColumn.One); return klinePanel; }
+  const panel = createPanel('stockFundStockKline', title, undefined, webviewUiRoot(extensionUri));
+  klinePanel = panel;
+  panel.onDidDispose(() => {
+    if (klinePanel !== panel) return;
+    klinePanel = undefined;
+    klineRequestVersion += 1;
+    klineMessages?.dispose();
+    klineMessages = undefined;
+  });
+  return panel;
 }
 
-function readStockChartMode(message: unknown): StockChartMode | undefined {
-  if (!message || typeof message !== 'object') return undefined;
-  const value = message as Record<string, unknown>;
-  if (value.command !== 'changeStockChartMode') return undefined;
-  return value.mode === 'standard' || value.mode === 'chips' ? value.mode : undefined;
+function isIndexStock(code: string, name: string): boolean {
+  const normalized = code.trim().toUpperCase();
+  if (normalized.startsWith('HF')) return false;
+  return ['USDJI', 'USIXIC', 'USINX', '0DJI', '0IXIC', '0INX'].includes(normalized) || /\u6307\u6570/.test(name);
 }
 
 function isControl(period: string | undefined, controls: readonly TrendControl[]): boolean {
   return period !== undefined && controls.some(({ id }) => id === period);
-}
-
-function nonce(): string {
-  return randomBytes(18).toString('base64url');
 }

@@ -384,14 +384,12 @@ function unavailableFund(code: string): FundQuote {
 }
 
 function unavailableStock(code: string): StockQuote {
-  const normalized = code.toLowerCase();
-  const market: StockQuote['market'] = normalized.startsWith('sh') ? 'sh'
-    : normalized.startsWith('sz') ? 'sz'
-      : normalized.startsWith('bj') ? 'bj'
-        : normalized.startsWith('hk') ? 'hk'
-          : normalized.startsWith('nf_') ? 'cn-future'
-            : normalized.startsWith('hf_') ? 'global-future'
-              : 'us';
+  const normalized = code.toUpperCase();
+  const market: StockQuote['market'] = normalized.startsWith('SH') ? 'sh'
+    : normalized.startsWith('SZ') ? 'sz'
+      : normalized.startsWith('HK') ? 'hk'
+        : normalized.startsWith('HF') ? 'global-future'
+          : 'us';
   return {
     code, name: code, market, price: 0, previousClose: 0, high: 0, low: 0,
     change: 0, changeRatio: 0, source: 'stock-api', status: 'unavailable',

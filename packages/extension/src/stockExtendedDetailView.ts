@@ -1,9 +1,9 @@
 import { randomBytes } from 'node:crypto';
 import { ProgressLocation, Uri, ViewColumn, WebviewPanel, window } from 'vscode';
 import { StockGateway, StockIwenCaiGateway, StockResearchGateway } from '@stock-fund/domain';
-import { renderIwenCaiTokenPage, renderStockExtendedDetailPage } from './stockExtendedDetailPage';
+import { renderIwenCaiTokenPage } from './stockExtendedDetailPage';
 import { loadStockExtendedDetail } from './stockExtendedDetailLoader';
-import { renderTrendError, renderTrendLoading } from './trendPage';
+import { renderWebviewUi, webviewUiRoot } from './webviewUi';
 
 let panel: WebviewPanel | undefined;
 let requestVersion = 0;
@@ -24,14 +24,16 @@ export async function showStockExtendedDetails(
     const supportsIwenCai = /^(?:sh|sz|bj)\d{6}$/i.test(code);
     const hexinToken = supportsIwenCai ? await requestIwenCaiToken(current, title, extensionUri) : undefined;
     if (panel !== current || version !== requestVersion) return;
-    current.webview.html = renderTrendLoading(title);
+    current.webview.html = renderWebviewUi(current.webview, extensionUri, { page: 'stockExtendedDetail', title });
     const detail = await window.withProgress(
       { location: ProgressLocation.Notification, title: `Loading ${name} stock details...` },
       () => loadStockExtendedDetail(stockGateway, researchGateway, iwencaiGateway, code, name, hexinToken)
     );
-    if (panel === current && version === requestVersion) current.webview.html = renderStockExtendedDetailPage(detail);
+    if (panel === current && version === requestVersion) current.webview.html = renderWebviewUi(current.webview, extensionUri, { page: 'stockExtendedDetail', title, detail });
   } catch (error) {
-    if (panel === current && version === requestVersion) current.webview.html = renderTrendError(title, error);
+    if (panel === current && version === requestVersion) current.webview.html = renderWebviewUi(current.webview, extensionUri, {
+      page: 'stockExtendedDetail', title, error: error instanceof Error ? error.message : String(error),
+    });
   }
 }
 
@@ -44,7 +46,7 @@ function acquirePanel(title: string, extensionUri: Uri): WebviewPanel {
   const created = window.createWebviewPanel('stockFundExtendedStockDetail', title, ViewColumn.One, {
     enableScripts: true,
     retainContextWhenHidden: false,
-    localResourceRoots: [Uri.joinPath(extensionUri, 'assets')],
+    localResourceRoots: [Uri.joinPath(extensionUri, 'assets'), webviewUiRoot(extensionUri)],
   });
   panel = created;
   created.onDidDispose(() => {

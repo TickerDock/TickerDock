@@ -12,34 +12,29 @@ import {
   UnsupportedMarketError,
 } from './index';
 
-describe('legacy stock code mapping', () => {
+describe('strict stock code mapping', () => {
   it.each([
-    ['sh600519', 'SH600519'],
-    ['sz000001', 'SZ000001'],
-    ['bj430047', 'BJ430047'],
-    ['hk00700', 'HK00700'],
-    ['usr_dji', 'USDJI'],
-    ['gb_aapl', 'USAAPL'],
-  ])('maps %s to %s', (legacy, api) => {
-    expect(toStockApiCode(legacy)).toBe(api);
+    ['SH600519', 'SH600519'], ['SZ000001', 'SZ000001'], ['HK00700', 'HK00700'], ['HKHSI', 'HKHSI'], ['HKHSTECH', 'HKHSTECH'], ['USAAPL', 'USAAPL'], ['USDJI', 'USDJI'], ['USIXIC', 'USIXIC'], ['USINX', 'USINX'], ['HFIF0', 'HFIF0'],
+  ])('accepts %s as %s', (code, api) => {
+    expect(toStockApiCode(code)).toBe(api);
   });
 
-  it('rejects futures so they can be routed to a dedicated adapter', () => {
+  it('rejects legacy lowercase and underscored formats', () => {
+    expect(() => marketFromLegacyCode('sh600519')).toThrow(UnsupportedMarketError);
     expect(() => marketFromLegacyCode('nf_IF0')).toThrow(UnsupportedMarketError);
+    expect(() => marketFromLegacyCode('0DJI')).toThrow(UnsupportedMarketError);
   });
 
   it.each([
-    ['SH600519', 'sh600519'],
-    ['HK00700', 'hk00700'],
-    ['USIXIC', 'usr_ixic'],
-  ])('maps API code %s back to %s', (api, legacy) => {
-    expect(fromStockApiCode(api)).toBe(legacy);
+    ['SH600519', 'SH600519'], ['HK00700', 'HK00700'], ['USDJI', 'USDJI'],
+  ])('keeps API code %s canonical', (api, canonical) => {
+    expect(fromStockApiCode(api)).toBe(canonical);
   });
 });
 
 describe('portfolio calculations', () => {
   const stockQuote = {
-    code: 'sh600519', name: 'Moutai', market: 'sh' as const, price: 110,
+    code: 'SH600519', name: 'Moutai', market: 'sh' as const, price: 110,
     previousClose: 100, high: 112, low: 99, change: 10, changeRatio: 0.1,
     source: 'test', status: 'live' as const,
   };
@@ -81,11 +76,11 @@ describe('portfolio calculations', () => {
 
   it('normalizes HKD and USD positions to CNY before aggregation', () => {
     const hk = calculateStockProfit({
-      ...stockQuote, code: 'hk00700', name: 'Tencent', market: 'hk', price: 110,
-    }, { code: 'hk00700', quantity: 10, costPrice: 80 })!;
+      ...stockQuote, code: 'HK00700', name: 'Tencent', market: 'hk', price: 110,
+    }, { code: 'HK00700', quantity: 10, costPrice: 80 })!;
     const us = calculateStockProfit({
-      ...stockQuote, code: 'usr_aapl', name: 'Apple', market: 'us', price: 110,
-    }, { code: 'usr_aapl', quantity: 10, costPrice: 80 })!;
+      ...stockQuote, code: 'USAAPL', name: 'Apple', market: 'us', price: 110,
+    }, { code: 'USAAPL', quantity: 10, costPrice: 80 })!;
     const summary = summarizePortfolio([hk, us], { CNY: 1, HKD: 0.92, USD: 7.2 });
 
     expect(hk.currency).toBe('HKD');
@@ -98,8 +93,8 @@ describe('portfolio calculations', () => {
 
   it('excludes foreign positions when their exchange rate is unavailable', () => {
     const hk = calculateStockProfit({
-      ...stockQuote, code: 'hk00700', market: 'hk', price: 110,
-    }, { code: 'hk00700', quantity: 10, costPrice: 80 })!;
+      ...stockQuote, code: 'HK00700', market: 'hk', price: 110,
+    }, { code: 'HK00700', quantity: 10, costPrice: 80 })!;
     const summary = summarizePortfolio([hk], { CNY: 1 });
 
     expect(summary.marketValue).toBe(0);
@@ -128,7 +123,7 @@ describe('portfolio calculations', () => {
 
 describe('stock reminders', () => {
   const quote = (price: number, changeRatio: number) => ({
-    code: 'sh600519', name: 'Moutai', market: 'sh' as const, price, previousClose: 100,
+    code: 'SH600519', name: 'Moutai', market: 'sh' as const, price, previousClose: 100,
     high: price, low: price, change: price - 100, changeRatio, source: 'test', status: 'live' as const,
   });
 
@@ -143,3 +138,4 @@ describe('stock reminders', () => {
     expect(evaluateStockReminders(quote(98, -0.02), quote(94, -0.06), rules)).toHaveLength(1);
   });
 });
+

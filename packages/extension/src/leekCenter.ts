@@ -1,6 +1,8 @@
 import { env, Uri, ViewColumn, WebviewPanel, window } from 'vscode';
-import { getLeekCenterPage, LeekCenterWatchlistData, renderLeekCenterHtml } from './leekCenterPages';
+import type { StockExtendedDetail } from '@stock-fund/domain';
+import { getLeekCenterPage, LEEK_CENTER_PAGES, LeekCenterWatchlistData } from './leekCenterPages';
 import { getEastMoneyProxy } from './eastMoneyProxy';
+import { postWebviewMessage, readWebviewEnvelope, renderWebviewUi, webviewUiRoot } from './webviewUi';
 
 let panel: WebviewPanel | undefined;
 let activeOptions: LeekCenterOptions | undefined;
@@ -10,13 +12,13 @@ export interface LeekCenterOptions {
   watchlist: LeekCenterWatchlistData;
   refreshWatchlist?: () => Promise<LeekCenterWatchlistData>;
   openWatchlistDetails?: (kind: 'stock' | 'fund', code: string, name: string) => Promise<void> | void;
-  loadStockDetails?: (code: string, name: string, token?: string) => Promise<string>;
+  loadStockDetails?: (code: string, name: string, token?: string) => Promise<StockExtendedDetail>;
 }
 
 export async function updateLeekCenterWatchlist(data: LeekCenterWatchlistData): Promise<void> {
   if (!activeOptions) return;
   activeOptions = { ...activeOptions, watchlist: data };
-  await panel?.webview.postMessage({ command: 'watchlistData', data });
+  if (panel) await postWebviewMessage(panel.webview, 'leekWatchlistData', { data });
 }
 
 export async function showLeekCenter(initialPageId?: string, options?: LeekCenterOptions): Promise<void> {
@@ -42,33 +44,37 @@ export async function showLeekCenter(initialPageId?: string, options?: LeekCente
       enableScripts: true,
       retainContextWhenHidden: true,
       portMapping: [{ webviewPort: proxy.port, extensionHostPort: proxy.port }],
-      localResourceRoots: [Uri.joinPath(activeOptions?.extensionUri ?? Uri.file(''), 'assets')],
+      localResourceRoots: [Uri.joinPath(activeOptions?.extensionUri ?? Uri.file(''), 'assets'), webviewUiRoot(activeOptions?.extensionUri ?? Uri.file(''))],
     }
   );
   panel.webview.html = renderHtml(panel, requestedPage, proxy.origin);
   panel.webview.onDidReceiveMessage(async (message: unknown) => {
-    if (isOpenExternalMessage(message)) {
-      const page = getLeekCenterPage(message.pageId);
+    const external = readWebviewEnvelope(message, 'openLeekExternal');
+    if (typeof external?.pageId === 'string') {
+      const page = getLeekCenterPage(external.pageId);
       if (page) await env.openExternal(Uri.parse(page.url));
       return;
     }
-    if (isRefreshWatchlistMessage(message) && activeOptions?.refreshWatchlist) {
+    if (readWebviewEnvelope(message, 'refreshLeekWatchlist') && activeOptions?.refreshWatchlist) {
       const data = await activeOptions.refreshWatchlist();
       activeOptions = { ...activeOptions, watchlist: data };
-      await panel?.webview.postMessage({ command: 'watchlistData', data });
+      if (panel) await postWebviewMessage(panel.webview, 'leekWatchlistData', { data });
       return;
     }
-    if (isOpenWatchlistDetailsMessage(message)) {
-      await activeOptions?.openWatchlistDetails?.(message.kind, message.code, message.name);
+    const openDetails = readWebviewEnvelope(message, 'openLeekWatchlistDetails');
+    if ((openDetails?.kind === 'stock' || openDetails?.kind === 'fund') && typeof openDetails.code === 'string' && typeof openDetails.name === 'string') {
+      await activeOptions?.openWatchlistDetails?.(openDetails.kind, openDetails.code, openDetails.name);
       return;
     }
-    if (isLoadStockDetailsMessage(message) && activeOptions?.loadStockDetails) {
+    const loadDetails = readWebviewEnvelope(message, 'loadLeekStockDetails');
+    if (typeof loadDetails?.key === 'string' && typeof loadDetails.code === 'string' && typeof loadDetails.name === 'string' && activeOptions?.loadStockDetails) {
       try {
-        const html = await activeOptions.loadStockDetails(message.code, message.name, message.token);
-        await panel?.webview.postMessage({ command: 'watchlistStockDetails', key: message.key, html });
+        const token = typeof loadDetails.token === 'string' ? loadDetails.token : undefined;
+        const detail = await activeOptions.loadStockDetails(loadDetails.code, loadDetails.name, token);
+        if (panel) await postWebviewMessage(panel.webview, 'leekStockDetails', { key: loadDetails.key, detail });
       } catch (error) {
-        await panel?.webview.postMessage({
-          command: 'watchlistStockDetails', key: message.key,
+        if (panel) await postWebviewMessage(panel.webview, 'leekStockDetails', {
+          key: loadDetails.key,
           error: error instanceof Error ? error.message : String(error),
         });
       }
@@ -79,45 +85,8 @@ export async function showLeekCenter(initialPageId?: string, options?: LeekCente
 
 function renderHtml(current: WebviewPanel, requestedPage: string | undefined, eastMoneyOrigin: string): string {
   const tokenModuleUri = current.webview.asWebviewUri(Uri.joinPath(activeOptions?.extensionUri ?? Uri.file(''), 'assets', 'hexin-v.js')).toString();
-  return renderLeekCenterHtml(
-    createNonce(), requestedPage, eastMoneyOrigin, activeOptions?.watchlist, tokenModuleUri, current.webview.cspSource
-  );
-}
-
-function isRefreshWatchlistMessage(value: unknown): value is { command: 'refreshWatchlist' } {
-  return Boolean(value && typeof value === 'object' && (value as { command?: unknown }).command === 'refreshWatchlist');
-}
-
-function isOpenWatchlistDetailsMessage(value: unknown): value is {
-  command: 'openWatchlistDetails'; kind: 'stock' | 'fund'; code: string; name: string;
-} {
-  if (!value || typeof value !== 'object') return false;
-  const message = value as Record<string, unknown>;
-  return message.command === 'openWatchlistDetails'
-    && (message.kind === 'stock' || message.kind === 'fund')
-    && typeof message.code === 'string'
-    && typeof message.name === 'string';
-}
-
-function isLoadStockDetailsMessage(value: unknown): value is {
-  command: 'loadWatchlistStockDetails'; key: string; code: string; name: string; token?: string;
-} {
-  if (!value || typeof value !== 'object') return false;
-  const message = value as Record<string, unknown>;
-  return message.command === 'loadWatchlistStockDetails'
-    && typeof message.key === 'string'
-    && typeof message.code === 'string'
-    && typeof message.name === 'string'
-    && (message.token === undefined || typeof message.token === 'string');
-}
-
-function isOpenExternalMessage(value: unknown): value is { command: 'openExternal'; pageId: string } {
-  if (!value || typeof value !== 'object') return false;
-  const message = value as Record<string, unknown>;
-  return message.command === 'openExternal' && typeof message.pageId === 'string';
-}
-
-function createNonce(): string {
-  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-  return Array.from({ length: 32 }, () => alphabet[Math.floor(Math.random() * alphabet.length)]).join('');
+  const pages = LEEK_CENTER_PAGES.map((page) => page.id === 'wind-vane' ? { ...page, url: `${eastMoneyOrigin}/zhuti/#ggfxb` } : page);
+  return renderWebviewUi(current.webview, activeOptions?.extensionUri ?? Uri.file(''), {
+    page: 'leekCenter', pages, initialPageId: requestedPage ?? 'bull-bear', watchlist: activeOptions?.watchlist ?? { stocks: [], funds: [], updatedAt: Date.now() },
+  }, { tokenModuleUri });
 }

@@ -26,7 +26,7 @@ import {
 } from './quoteProviders';
 import { RefreshController, RefreshReason } from './refreshController';
 import { ReminderService } from './reminderService';
-import { showFundHistory, showSectorHistory, showStockHistory } from './historyView';
+import { showFundHistory, showSectorHistory, showStockHistory, showStockKline } from './historyView';
 import { CryptoProvider, CryptoTreeItem, ForexProvider } from './marketProviders';
 import { moveCode } from './orderUtils';
 import { FlashNewsProvider, FlashNewsTreeItem } from './newsProvider';
@@ -52,14 +52,13 @@ import { registerLegacyCommandAliases } from './legacyCommandAliases';
 import { showStockResearch } from './stockResearchView';
 import { showStockExtendedDetails } from './stockExtendedDetailView';
 import { loadStockExtendedDetail } from './stockExtendedDetailLoader';
-import { renderStockExtendedDetailSections } from './stockExtendedDetailPage';
 import { researchKeywordForStockCode } from './stockAnalysisModel';
 import { showPersonalization } from './personalizationView';
 import { showBinanceIframe } from './binanceIframeView';
 import { stopEastMoneyProxy } from './eastMoneyProxy';
 import { pickSearchResult } from './searchQuickPick';
 
-const DEFAULT_STOCKS = ['sh000001', 'sh000300', 'hk00700', 'usr_ixic'];
+const DEFAULT_STOCKS = ['SH000001', 'SH000300', 'HK00700', 'USIXIC'];
 const DEFAULT_FUNDS = [['001632', '420009', '320007']];
 
 export function activate(context: ExtensionContext): void {
@@ -252,18 +251,16 @@ export function activate(context: ExtensionContext): void {
     },
     openWatchlistDetails: (kind, code, name) => kind === 'stock'
       ? showStockExtendedDetails(stockGateway, stockResearchGateway, iwencaiGateway, context.extensionUri, code, name)
-      : showFundDetails(fundInsightsGateway, code, name),
-    loadStockDetails: async (code, name, token) => renderStockExtendedDetailSections(
-      await loadStockExtendedDetail(stockGateway, stockResearchGateway, iwencaiGateway, code, name, token)
-    ),
+      : showFundDetails(fundInsightsGateway, context.extensionUri, code, name),
+    loadStockDetails: (code, name, token) => loadStockExtendedDetail(stockGateway, stockResearchGateway, iwencaiGateway, code, name, token),
   });
   context.subscriptions.push(
     commands.registerCommand('stock-fund.openLeekCenter', () => openLeekCenter()),
     commands.registerCommand('stock-fund.manageSectors', () =>
-      showSectorManager(config, (sectors) => sectorProvider.setSectors(sectors))
+      showSectorManager(context.extensionUri, config, (sectors) => sectorProvider.setSectors(sectors))
     ),
     commands.registerCommand('stock-fund.openSector', (item: SectorTreeItem) =>
-      showSectorHistory(item.sector.code, item.sector.name)
+      showSectorHistory(context.extensionUri, item.sector.code, item.sector.name)
     ),
     commands.registerCommand('stock-fund.openStockConnectFlow', () => openLeekCenter('northbound-flow')),
     commands.registerCommand('stock-fund.openMainCapitalFlow', () => openLeekCenter('main-capital-flow')),
@@ -285,11 +282,11 @@ export function activate(context: ExtensionContext): void {
       commands.executeCommand('workbench.action.openSettings', '@ext:stock-fund-beta.stock-fund')
     ),
     commands.registerCommand('stock-fund.openPersonalization', () =>
-      showPersonalization(config, applyPersonalization, watchedStockOptions(config, stockProvider))
+      showPersonalization(context.extensionUri, config, applyPersonalization, watchedStockOptions(config, stockProvider))
     ),
     commands.registerCommand('stock-fund.configureAiHistoryRange', () => configureAiHistoryRange(config)),
     commands.registerCommand('stock-fund.deleteAiKey', () => deleteAiKey(secrets)),
-    commands.registerCommand('stock-fund.askAi', () => askAi(config, secrets, aiOutput)),
+    commands.registerCommand('stock-fund.askAi', () => askAi(context.extensionUri, config, secrets, aiOutput)),
     commands.registerCommand('stock-fund.showAiOutput', () => aiOutput.show()),
     commands.registerCommand('stock-fund.clearAiOutput', () => {
       aiOutput.clear();
@@ -327,11 +324,13 @@ export function activate(context: ExtensionContext): void {
       return showStockResearch(
         stockResearchGateway,
         query,
-        typeof item.label === 'string' ? item.label : item.label?.label ?? item.code
+        typeof item.label === 'string' ? item.label : item.label?.label ?? item.code,
+        context.extensionUri
       );
     }),
     commands.registerCommand('stock-fund.analyzeStock', (item: StockQuoteTreeItem) =>
       analyzeStock(
+        context.extensionUri,
         item.code,
         typeof item.label === 'string' ? item.label : item.label?.label ?? item.code,
         stockGateway,
@@ -409,7 +408,7 @@ function registerStatusBarCommands(
   const update = () => updateStatusBarOptions(config, portfolioBar, marketStatusBar);
   context.subscriptions.push(
     commands.registerCommand('stock-fund.viewStockHistoryByCode', (code: string, name?: string) => showStockHistory(
-      code, name || code, config.getStockChartMode(), (mode) => config.setStockChartMode(mode)
+      context.extensionUri, code, name || code, config.getStockChartMode(), (mode) => config.setStockChartMode(mode)
     )),
     commands.registerCommand('stock-fund.togglePortfolioStatusBar', async () => {
       const visible = config.getShowStockPortfolioStatusBar() || config.getShowFundPortfolioStatusBar();
@@ -444,7 +443,7 @@ function registerStatusBarCommands(
     }),
     commands.registerCommand('stock-fund.addStockToStatusBar', async (item: StockQuoteTreeItem) => {
       const watched = config.getStocks(DEFAULT_STOCKS);
-      const selected = config.getStatusBarStocks(['sh000001']);
+      const selected = config.getStatusBarStocks(['SH000001']);
       if (selected.includes(item.code)) {
         void window.showInformationMessage(`${item.code} is already shown in the status bar.`);
         return;
@@ -457,12 +456,12 @@ function registerStatusBarCommands(
       update();
     }),
     commands.registerCommand('stock-fund.removeStockFromStatusBar', async (item: StockQuoteTreeItem) => {
-      await config.setStatusBarStocks(config.getStatusBarStocks(['sh000001']).filter((code) => code !== item.code));
+      await config.setStatusBarStocks(config.getStatusBarStocks(['SH000001']).filter((code) => code !== item.code));
       update();
     }),
     commands.registerCommand('stock-fund.configureStatusBarStocks', async () => {
       const watched = config.getStocks(DEFAULT_STOCKS);
-      const current = new Set(config.getStatusBarStocks(['sh000001']));
+      const current = new Set(config.getStatusBarStocks(['SH000001']));
       const selected = await window.showQuickPick(watched.map((code) => ({
         label: code,
         picked: current.has(code),
@@ -503,7 +502,7 @@ function updateStatusBarOptions(
   marketStatusBar.setOptions({
     visible: config.getShowMarketStatusBar(),
     showIcons: config.getShowStatusBarIcons(),
-    codes: config.getStatusBarStocks(['sh000001']),
+    codes: config.getStatusBarStocks(['SH000001']),
     appearance,
   });
 }
@@ -520,7 +519,7 @@ function registerMarketCommands(
     commands.registerCommand('stock-fund.refreshBinance', () => cryptoRefresh.refreshNow()),
     commands.registerCommand('stock-fund.refreshForex', () => forexRefresh.refreshNow()),
     commands.registerCommand('stock-fund.viewBinanceHistory', (item: CryptoTreeItem) =>
-      showBinanceIframe(item.symbol, treeItemLabel(item))),
+      showBinanceIframe(context.extensionUri, item.symbol, treeItemLabel(item))),
     commands.registerCommand('stock-fund.sortBinance', async () => {
       const mode = cryptoProvider.cycleSort();
       await config.setBinanceSortMode(mode);
@@ -575,20 +574,24 @@ function registerCommands(
     commands.registerCommand('stock-fund.refreshFund', () => fundRefresh.refreshNow()),
     commands.registerCommand('stock-fund.viewStockHistory', (item: StockQuoteTreeItem) =>
       showStockHistory(
+        extensionUri,
         item.code,
         item.name,
         config.getStockChartMode(),
-        (mode) => config.setStockChartMode(mode)
+        (mode) => config.setStockChartMode(mode),
+        stockGateway
       )),
     commands.registerCommand('stock-fund.viewStockDetails', (item: StockQuoteTreeItem) =>
-      showStockExtendedDetails(stockGateway, stockResearchGateway, iwencaiGateway, extensionUri, item.code, item.name)),
+      isIndexStock(item.code, item.name)
+        ? showStockKline(stockGateway, extensionUri, item.code, item.name)
+        : showStockExtendedDetails(stockGateway, stockResearchGateway, iwencaiGateway, extensionUri, item.code, item.name)),
     commands.registerCommand('stock-fund.viewFundHistory', (item: FundQuoteTreeItem) =>
       showFundHistory(fundGateway, extensionUri, item.code, item.name)),
     commands.registerCommand('stock-fund.viewFundDetails', (item: FundQuoteTreeItem) =>
-      showFundDetails(fundInsightsGateway, item.code, item.name)),
-    commands.registerCommand('stock-fund.viewFundHoldings', (item: FundQuoteTreeItem) => showFundHoldings(fundInsightsGateway, item.code)),
-    commands.registerCommand('stock-fund.viewFundRanking', () => showFundRanking(fundInsightsGateway)),
-    commands.registerCommand('stock-fund.viewFundFlows', () => showFundFlows(fundInsightsGateway)),
+      showFundDetails(fundInsightsGateway, extensionUri, item.code, item.name)),
+    commands.registerCommand('stock-fund.viewFundHoldings', (item: FundQuoteTreeItem) => showFundHoldings(fundInsightsGateway, extensionUri, item.code)),
+    commands.registerCommand('stock-fund.viewFundRanking', () => showFundRanking(fundInsightsGateway, extensionUri)),
+    commands.registerCommand('stock-fund.viewFundFlows', () => showFundFlows(fundInsightsGateway, extensionUri)),
     commands.registerCommand('stock-fund.viewFundComparison', async () => {
       const funds = fundProvider.getWatchItems();
       if (funds.length < 2) {
@@ -633,7 +636,7 @@ function registerCommands(
       const names = new Map(stockProvider.getWatchItems().map((item) => [item.code, item.name]));
       const watched = config.getStocks(DEFAULT_STOCKS).map((code) => ({ code, name: names.get(code) || code }));
       const items = mergePositionManagerItems(watched, positions.keys());
-      showStockPositionManager(items, positions, async (values) => {
+      showStockPositionManager(extensionUri, items, positions, async (values) => {
         await config.replaceStockPositions(values);
         await stockRefresh.refreshNow();
       });
@@ -644,7 +647,7 @@ function registerCommands(
       const codes = [...new Set(config.getFundGroups(DEFAULT_FUNDS).flatMap(({ codes: values }) => values))];
       const watched = codes.map((code) => ({ code, name: names.get(code) || code }));
       const items = mergePositionManagerItems(watched, positions.keys());
-      showFundPositionManager(items, positions, async (values) => {
+      showFundPositionManager(extensionUri, items, positions, async (values) => {
         await config.replaceFundPositions(values);
         await fundRefresh.refreshNow();
       });
@@ -902,6 +905,12 @@ function optionalPositiveNumberValidation(value: string): string | undefined {
 
 function treeItemLabel(item: { label?: string | { label: string } }): string {
   return typeof item.label === 'string' ? item.label : item.label?.label ?? '';
+}
+
+function isIndexStock(code: string, name: string): boolean {
+  const normalized = code.trim().toUpperCase();
+  if (normalized.startsWith('HF')) return false;
+  return ['USDJI', 'USIXIC', 'USINX', '0DJI', '0IXIC', '0INX'].includes(normalized) || /\u6307\u6570/.test(name);
 }
 
 export function deactivate(): void {
