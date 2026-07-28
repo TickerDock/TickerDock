@@ -92,31 +92,18 @@ describe('StockApiGateway', () => {
     ]);
   });
 
-  it('loads and normalizes K-lines through stock-sdk', async () => {
-    let sdkOptions: unknown;
-    const sdk = { kline: {
-      cn: async (_code: string, options: unknown) => {
-        sdkOptions = options;
-        return [
-          { date: '2026-07-01', open: 1, close: 2, high: 3, low: 1, volume: 10 },
-          { date: '2026-07-02', open: 2, close: 3, high: 4, low: 2, volume: 20 },
-          { date: '2026-07-03', open: 3, close: 4, high: 5, low: 3, volume: 30 },
-        ];
-      },
-      hk: vi.fn(),
-      us: vi.fn(),
-    } };
-    const gateway = new StockApiGateway({} as never, sdk as never);
+  it.each([
+    ['SH600519', 'SH600519', { period: 'week', count: 2, adjust: 'qfq' }],
+    ['HKHSI', 'HKHSI', { period: 'day', count: 120, adjust: 'none' }],
+    ['USIXIC', 'US.IXIC', { period: 'day', count: 120, adjust: 'none' }],
+  ] as const)('loads K-lines for %s through stock-api as %s', async (code, apiCode, options) => {
+    const client = { getKlines: vi.fn(async () => [{
+      date: '2026-07-01', open: 1, close: 2, high: 3, low: 1, source: 'tencent',
+    }]) };
+    const gateway = new StockApiGateway(client as never);
 
-    await expect(gateway.getKlines('SH600519', {
-      period: 'week', count: 2, adjust: 'none',
-    })).resolves.toEqual([
-      { date: '2026-07-02', open: 2, close: 3, high: 4, low: 2, volume: 20, source: 'stock-sdk' },
-      { date: '2026-07-03', open: 3, close: 4, high: 5, low: 3, volume: 30, source: 'stock-sdk' },
-    ]);
-    expect(sdkOptions).toMatchObject({
-      period: 'weekly', adjust: '', startDate: expect.stringMatching(/^\d{8}$/), endDate: expect.stringMatching(/^\d{8}$/),
-    });
+    await expect(gateway.getKlines(code, options)).resolves.toHaveLength(1);
+    expect(client.getKlines).toHaveBeenCalledWith(apiCode, options);
   });
 });
 

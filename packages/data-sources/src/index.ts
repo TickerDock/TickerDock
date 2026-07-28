@@ -47,23 +47,6 @@ import {
 type StockApiClient = typeof stocks.auto;
 type FundApiClient = typeof funds.auto;
 
-type SdkKlineRow = {
-  date: string;
-  open: number | null;
-  close: number | null;
-  high: number | null;
-  low: number | null;
-  volume: number | null;
-};
-
-interface StockSdkKlineClient {
-  kline: {
-    cn: (code: string, options: SdkKlineOptions) => Promise<SdkKlineRow[]>;
-    hk: (code: string, options: SdkKlineOptions) => Promise<SdkKlineRow[]>;
-    us: (code: string, options: SdkKlineOptions) => Promise<SdkKlineRow[]>;
-  };
-}
-
 interface StockSdkFundClient {
   fund: {
     estimate: (code: string) => Promise<{
@@ -128,21 +111,11 @@ type SdkSectorFundFlowRankRow = {
   topStockName?: string;
 };
 
-type SdkKlineOptions = {
-  period: 'daily' | 'weekly' | 'monthly';
-  adjust: '' | 'qfq' | 'hfq';
-  startDate?: string;
-  endDate?: string;
-};
-
 const defaultStockSdk = createStockSdk();
 const FUND_ESTIMATE_CONCURRENCY = 4;
 
 export class StockApiGateway implements StockGateway {
-  constructor(
-    private readonly client: StockApiClient = stocks.auto,
-    private readonly sdk: StockSdkKlineClient = defaultStockSdk
-  ) {}
+  constructor(private readonly client: StockApiClient = stocks.auto) {}
 
   async getQuotes(codes: readonly string[]): Promise<StockQuote[]> {
     const supported = codes.flatMap((canonicalCode) => {
@@ -190,28 +163,8 @@ export class StockApiGateway implements StockGateway {
     options?: { period?: 'day' | 'week' | 'month'; count?: number; adjust?: 'none' | 'qfq' | 'hfq' }
   ): Promise<Kline[]> {
     const apiCode = toStockApiCode(code);
-    const market = marketFromLegacyCode(apiCode);
-    const method = market === 'hk'
-      ? this.sdk.kline.hk
-      : market === 'us' ? this.sdk.kline.us : this.sdk.kline.cn;
-    const range = sdkKlineRange(options?.period ?? 'day', options?.count);
-    const rows = await method(apiCode, {
-      period: sdkKlinePeriod(options?.period),
-      adjust: options?.adjust === 'none' ? '' : options?.adjust ?? 'qfq',
-      ...range,
-    });
-    return rows.flatMap((row) => {
-      if ([row.open, row.close, row.high, row.low].some((value) => value === null)) return [];
-      return [{
-        date: row.date,
-        open: row.open!,
-        close: row.close!,
-        high: row.high!,
-        low: row.low!,
-        volume: row.volume ?? undefined,
-        source: 'stock-sdk',
-      }];
-    }).slice(-(options?.count ?? rows.length));
+    const indexCode = ({ USDJI: 'US.DJI', USIXIC: 'US.IXIC', USINX: 'US.INX' } as const)[apiCode as 'USDJI' | 'USIXIC' | 'USINX'];
+    return this.client.getKlines(indexCode ?? apiCode, indexCode ? { ...options, adjust: 'none' } : options);
   }
 }
 
@@ -951,29 +904,6 @@ function limitSdkFundFlowRankPages(request: typeof fetch): typeof fetch {
       headers,
     });
   };
-}
-
-function sdkKlinePeriod(period: 'day' | 'week' | 'month' = 'day'): SdkKlineOptions['period'] {
-  return period === 'week' ? 'weekly' : period === 'month' ? 'monthly' : 'daily';
-}
-
-function sdkKlineRange(
-  period: 'day' | 'week' | 'month',
-  count: number | undefined,
-  now = new Date()
-): Pick<SdkKlineOptions, 'startDate' | 'endDate'> {
-  if (!count || count <= 0) return {};
-  const daysPerBar = period === 'month' ? 45 : period === 'week' ? 10 : 2;
-  const start = new Date(now);
-  start.setDate(start.getDate() - count * daysPerBar - 30);
-  return { startDate: compactDate(start), endDate: compactDate(now) };
-}
-
-function compactDate(value: Date): string {
-  const year = value.getFullYear();
-  const month = String(value.getMonth() + 1).padStart(2, '0');
-  const day = String(value.getDate()).padStart(2, '0');
-  return `${year}${month}${day}`;
 }
 
 export function parseMarketBreadth(value: unknown): MarketBreadthSummary | undefined {
