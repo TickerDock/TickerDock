@@ -52,17 +52,44 @@ describe('RefreshController', () => {
     controller.dispose();
   });
 
-  it('does not overlap manual refreshes', async () => {
-    let release: (() => void) | undefined;
-    const task = vi.fn(() => new Promise<void>((resolve) => { release = resolve; }));
+  it('queues one manual refresh while another refresh is running', async () => {
+    const releases: Array<() => void> = [];
+    const task = vi.fn(() => new Promise<void>((resolve) => { releases.push(resolve); }));
     const controller = new RefreshController(5000, task);
 
     const first = controller.refreshNow();
-    await controller.refreshNow();
+    const second = controller.refreshNow();
+    const third = controller.refreshNow();
     expect(task).toHaveBeenCalledTimes(1);
 
-    release?.();
+    releases.shift()?.();
     await first;
+    expect(task).toHaveBeenCalledTimes(2);
+
+    releases.shift()?.();
+    await Promise.all([second, third]);
+    expect(task).toHaveBeenCalledTimes(2);
+    controller.dispose();
+  });
+
+  it('queues a manual refresh requested during the initial refresh', async () => {
+    vi.useFakeTimers();
+    const releases: Array<() => void> = [];
+    const reasons: string[] = [];
+    const controller = new RefreshController(5000, (reason) => {
+      reasons.push(reason);
+      return new Promise<void>((resolve) => { releases.push(resolve); });
+    });
+
+    controller.start();
+    await vi.advanceTimersByTimeAsync(0);
+    const manual = controller.refreshNow();
+    releases.shift()?.();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(reasons).toEqual(['initial', 'manual']);
+
+    releases.shift()?.();
+    await manual;
     controller.dispose();
   });
 

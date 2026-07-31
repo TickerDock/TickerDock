@@ -7,6 +7,11 @@ export class RefreshController implements Disposable {
   private started = false;
   private running = false;
   private disposed = false;
+  private queuedManualRefresh: {
+    promise: Promise<void>;
+    resolve: () => void;
+    reject: (error: unknown) => void;
+  } | undefined;
 
   constructor(
     private intervalMs: number,
@@ -35,12 +40,30 @@ export class RefreshController implements Disposable {
   }
 
   private async run(reason: RefreshReason): Promise<void> {
-    if (this.running || this.disposed) return;
+    if (this.disposed) return;
+    if (this.running) {
+      if (reason !== 'manual') return;
+      if (!this.queuedManualRefresh) {
+        let resolve!: () => void;
+        let reject!: (error: unknown) => void;
+        const promise = new Promise<void>((resolvePromise, rejectPromise) => {
+          resolve = resolvePromise;
+          reject = rejectPromise;
+        });
+        this.queuedManualRefresh = { promise, resolve, reject };
+      }
+      return this.queuedManualRefresh.promise;
+    }
     this.running = true;
     try {
       await this.refreshTask(reason);
     } finally {
       this.running = false;
+      const queued = this.queuedManualRefresh;
+      this.queuedManualRefresh = undefined;
+      if (queued) {
+        void this.run('manual').then(queued.resolve, queued.reject);
+      }
     }
   }
 

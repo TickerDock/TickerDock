@@ -275,7 +275,10 @@ export async function activate(context: ExtensionContext): Promise<void> {
     );
   };
   context.subscriptions.push(
-    stockTree.onDidChangeVisibility(syncRefreshScheduling),
+    stockTree.onDidChangeVisibility(({ visible }) => {
+      syncRefreshScheduling();
+      if (visible) void stockRefresh.refreshNow();
+    }),
     fundTree.onDidChangeVisibility(syncRefreshScheduling),
     cryptoTree.onDidChangeVisibility(syncRefreshScheduling),
     forexTree.onDidChangeVisibility(syncRefreshScheduling)
