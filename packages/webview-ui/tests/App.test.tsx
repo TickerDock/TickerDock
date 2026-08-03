@@ -67,6 +67,41 @@ describe('webview UI', () => {
     });
   });
 
+  it('keeps save actionable and identifies an incomplete position row', async () => {
+    render(<App bootstrap={{
+      page: 'stockPositions',
+      items: [{ code: 'sh600000', name: '浦发银行' }],
+      positions: [],
+    }} />);
+    await userEvent.type(screen.getAllByRole('spinbutton')[0]!, '200');
+    const save = screen.getByRole('button', { name: '保存' });
+    expect(save).toBeEnabled();
+
+    await userEvent.click(save);
+    expect(screen.getByRole('alert')).toHaveTextContent('请完成标记的必填项');
+    expect(screen.getAllByRole('spinbutton')[1]).toHaveAttribute('aria-invalid', 'true');
+    expect(vi.mocked(postMessage)).not.toHaveBeenCalledWith('saveStockPositions', expect.anything());
+
+    await userEvent.type(screen.getAllByRole('spinbutton')[1]!, '10');
+    await userEvent.click(save);
+    expect(vi.mocked(postMessage)).toHaveBeenCalledWith('saveStockPositions', {
+      positions: [{ code: 'sh600000', quantity: 200, costPrice: 10, soldOut: false }],
+    });
+  });
+
+  it('accepts zero as clearing the optional stock trade price override', async () => {
+    render(<App bootstrap={{
+      page: 'stockPositions',
+      items: [{ code: 'sh600000', name: '浦发银行' }],
+      positions: [{ code: 'sh600000', quantity: 100, costPrice: 10, soldOut: false }],
+    }} />);
+    await userEvent.type(screen.getAllByRole('spinbutton')[2]!, '0');
+    await userEvent.click(screen.getByRole('button', { name: '保存' }));
+    expect(vi.mocked(postMessage)).toHaveBeenCalledWith('saveStockPositions', {
+      positions: [{ code: 'sh600000', quantity: 100, costPrice: 10, todayTradePrice: 0, soldOut: false }],
+    });
+  });
+
   it('adds and saves a new fund position', async () => {
     render(<App bootstrap={{
       page: 'fundPositions',

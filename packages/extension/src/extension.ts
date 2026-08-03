@@ -705,10 +705,7 @@ function registerCommands(
       const names = new Map(stockProvider.getWatchItems().map((item) => [item.code, item.name]));
       const watched = config.getStocks(DEFAULT_STOCKS).map((code) => ({ code, name: names.get(code) || code }));
       const items = mergePositionManagerItems(watched, positions.keys());
-      showStockPositionManager(extensionUri, items, positions, async (values) => {
-        await config.replaceStockPositions(values);
-        await stockRefresh.refreshNow();
-      });
+      showStockPositionManager(extensionUri, items, positions, (values) => config.replaceStockPositions(values));
     }),
     commands.registerCommand('tickerdock.manageFundPositions', () => {
       const positions = config.getFundPositions();
@@ -716,10 +713,7 @@ function registerCommands(
       const codes = [...new Set(config.getFundGroups(DEFAULT_FUNDS).flatMap(({ codes: values }) => values))];
       const watched = codes.map((code) => ({ code, name: names.get(code) || code }));
       const items = mergePositionManagerItems(watched, positions.keys());
-      showFundPositionManager(extensionUri, items, positions, async (values) => {
-        await config.replaceFundPositions(values);
-        await fundRefresh.refreshNow();
-      });
+      showFundPositionManager(extensionUri, items, positions, (values) => config.replaceFundPositions(values));
     }),
     commands.registerCommand('tickerdock.addStockGroup', async () => {
       const name = await window.showInputBox({ prompt: 'Stock group name', ignoreFocusOut: true });

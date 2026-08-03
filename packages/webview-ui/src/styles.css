@@ -69,6 +69,14 @@ button:disabled {
   color: var(--vscode-descriptionForeground);
   font-size: 12px;
 }
+.form-error {
+  margin: 0 0 12px;
+  color: var(--vscode-errorForeground);
+}
+input[aria-invalid="true"] {
+  outline: 1px solid var(--vscode-inputValidation-errorBorder, var(--vscode-errorForeground));
+  outline-offset: -1px;
+}
 .primary,
 .section-head button,
 .settings-actions button {

@@ -38,6 +38,16 @@ describe('position manager model', () => {
     }]);
   });
 
+  it('treats a zero today trade price as clearing the optional override', () => {
+    const allowed = new Set(['sh600519']);
+    expect(parseStockPositionSaveMessage(message('saveStockPositions', [{
+      code: 'sh600519', quantity: 100, costPrice: 1500, todayTradePrice: 0, soldOut: false,
+    }]), allowed)).toEqual([{
+      code: 'sh600519', quantity: 100, costPrice: 1500, todayTradePrice: undefined,
+      soldOut: false, soldOutDate: undefined,
+    }]);
+  });
+
   it('rejects partial, duplicate, and non-positive fund positions', () => {
     const allowed = new Set(['110022']);
     expect(parseFundPositionSaveMessage(message('saveFundPositions', [{

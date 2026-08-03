@@ -26,7 +26,7 @@ export function parseStockPositionSaveMessage(
   return parseUniquePositions(payload, allowedCodes, (item, code) => {
     const quantity = requiredPositiveNumber(item.quantity, `${code} quantity`);
     const costPrice = requiredPositiveNumber(item.costPrice, `${code} cost price`);
-    const todayTradePrice = optionalPositiveNumber(item.todayTradePrice, `${code} today trade price`);
+    const todayTradePrice = optionalNonNegativeNumber(item.todayTradePrice, `${code} today trade price`);
     if (typeof item.soldOut !== 'boolean') throw new Error(`${code} sold-out state is invalid.`);
     const soldOutDate = item.soldOut
       ? optionalDateString(item.soldOutDate, `${code} sold-out date`) || localDateString()
@@ -82,9 +82,12 @@ function requiredPositiveNumber(value: unknown, label: string): number {
   return value;
 }
 
-function optionalPositiveNumber(value: unknown, label: string): number | undefined {
+function optionalNonNegativeNumber(value: unknown, label: string): number | undefined {
   if (value === undefined || value === null || value === '') return undefined;
-  return requiredPositiveNumber(value, label);
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
+    throw new Error(`${label} must not be negative.`);
+  }
+  return value || undefined;
 }
 
 function optionalDateString(value: unknown, label: string): string | undefined {
