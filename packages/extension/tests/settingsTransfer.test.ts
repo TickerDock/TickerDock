@@ -95,6 +95,23 @@ describe('settings transfer', () => {
       'tickerdock.stocks': ['sh000001'],
       'tickerdock.interval': 100,
     })).toThrow('tickerdock.interval');
+    expect(() => parseSettingsBundle({
+      'tickerdock.marketStatusBarInterval': 2999,
+    })).toThrow('tickerdock.marketStatusBarInterval');
+    expect(() => parseSettingsBundle({
+      'tickerdock.portfolioStatusBarInterval': 2999,
+    })).toThrow('tickerdock.portfolioStatusBarInterval');
+  });
+
+  it('round-trips independent status bar refresh intervals', () => {
+    const parsed = parseSettingsBundle(createSettingsBundle({
+      marketStatusBarInterval: 5000,
+      portfolioStatusBarInterval: 10000,
+    }));
+    expect(parsed.settings).toMatchObject({
+      marketStatusBarInterval: 5000,
+      portfolioStatusBarInterval: 10000,
+    });
   });
 
   it('round-trips custom stock groups and validates nested stock lists', () => {

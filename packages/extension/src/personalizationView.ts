@@ -13,6 +13,8 @@ export interface PersonalizationViewState extends PersonalizationConfig {
   showStockPortfolioStatusBar: boolean;
   showFundPortfolioStatusBar: boolean;
   showStatusBarIcons: boolean;
+  marketStatusBarInterval: number;
+  portfolioStatusBarInterval: number;
   statusBarStocks: string[];
   availableStocks: readonly PersonalizationStockOption[];
 }
@@ -42,6 +44,8 @@ export function showPersonalization(
     showStockPortfolioStatusBar: true,
     showFundPortfolioStatusBar: true,
     showStatusBarIcons: true,
+    marketStatusBarInterval: 15000,
+    portfolioStatusBarInterval: 15000,
     statusBarStocks: defaultStatusBarStocks,
     availableStocks,
   });
@@ -55,6 +59,8 @@ export function showPersonalization(
     showStockPortfolioStatusBar: config.getShowStockPortfolioStatusBar(),
     showFundPortfolioStatusBar: config.getShowFundPortfolioStatusBar(),
     showStatusBarIcons: config.getShowStatusBarIcons(),
+    marketStatusBarInterval: config.getMarketStatusBarInterval(),
+    portfolioStatusBarInterval: config.getPortfolioStatusBarInterval(),
     statusBarStocks: config.getStatusBarStocks(defaultStatusBarStocks).filter((code) => availableCodes.has(code)),
     availableStocks,
   });
@@ -102,10 +108,17 @@ export function validateViewState(value: unknown, availableStocks: readonly Pers
   ] as const;
   for (const key of booleans) if (typeof record[key] !== 'boolean') throw new Error(`Invalid ${key}.`);
   if (record.stockChartMode !== 'standard' && record.stockChartMode !== 'chips') throw new Error('Invalid stockChartMode.');
+  for (const key of ['marketStatusBarInterval', 'portfolioStatusBarInterval'] as const) {
+    if (typeof record[key] !== 'number' || !Number.isFinite(record[key]) || record[key] < 3000) {
+      throw new Error(`Invalid ${key}.`);
+    }
+  }
   return {
     ...personalization,
     ...Object.fromEntries(booleans.map((key) => [key, record[key]])),
     stockChartMode: record.stockChartMode,
+    marketStatusBarInterval: record.marketStatusBarInterval,
+    portfolioStatusBarInterval: record.portfolioStatusBarInterval,
     statusBarStocks: validateStatusBarStocks(record.statusBarStocks, availableStocks),
     availableStocks: [],
   } as unknown as PersonalizationViewState;
@@ -128,6 +141,8 @@ async function saveState(config: ConfigRepository, value: PersonalizationViewSta
     config.setShowStockPortfolioStatusBar(value.showStockPortfolioStatusBar),
     config.setShowFundPortfolioStatusBar(value.showFundPortfolioStatusBar),
     config.setShowStatusBarIcons(value.showStatusBarIcons), config.setStatusBarStocks(value.statusBarStocks),
+    config.setMarketStatusBarInterval(value.marketStatusBarInterval),
+    config.setPortfolioStatusBarInterval(value.portfolioStatusBarInterval),
   ]);
 }
 

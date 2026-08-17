@@ -25,6 +25,8 @@ export type PersonalizationState = {
   showStockPortfolioStatusBar: boolean;
   showFundPortfolioStatusBar: boolean;
   showStatusBarIcons: boolean;
+  marketStatusBarInterval: number;
+  portfolioStatusBarInterval: number;
   statusBarStocks: string[];
   availableStocks: PositionItem[];
 };

@@ -106,8 +106,8 @@ API Key 仅保存在 VS Code SecretStorage 中。支持 `1w`、`1m`、`3m`、`6m
 TickerDock 会随 VS Code 启动，以便及时创建底部状态栏，但后台任务会根据实际需求调度：
 
 - 前台行情默认每 15 秒刷新；
-- 股票视图隐藏后，状态栏和提醒所需刷新最低间隔为 60 秒；
-- 隐藏时只请求状态栏、持仓和提醒依赖的股票，不请求整个自选列表；
+- 底部行情与持仓使用独立刷新间隔，默认每 15 秒刷新，最低可设为 3 秒；
+- 股票视图隐藏后，提醒轮询最低间隔为 60 秒，且只请求提醒依赖的股票；
 - 基金视图隐藏且没有基金持仓时停止基金刷新；
 - 隐藏基金视图只估值持仓基金，估值请求最大并发数为 4；
 - Binance 仅在对应视图可见时轮询；
@@ -122,6 +122,8 @@ TickerDock 会随 VS Code 启动，以便及时创建底部状态栏，但后台
 | 配置项 | 说明 | 默认值 |
 | --- | --- | --- |
 | `tickerdock.interval` | 股票、基金前台刷新间隔（毫秒） | `15000` |
+| `tickerdock.marketStatusBarInterval` | 底部行情股票刷新间隔（毫秒） | `15000` |
+| `tickerdock.portfolioStatusBarInterval` | 底部股票、基金持仓刷新间隔（毫秒） | `15000` |
 | `tickerdock.marketHoursEnabled` | 仅在对应市场交易时段自动刷新 | `true` |
 | `tickerdock.binanceInterval` | Binance 刷新间隔 | `10000` |
 | `tickerdock.forexInterval` | 外汇刷新间隔 | `3600000` |

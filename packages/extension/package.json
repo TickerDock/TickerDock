@@ -2,7 +2,7 @@
   "name": "tickerdock",
   "displayName": "TickerDock",
   "description": "在 VS Code 侧边栏快速查看股票、基金、期货、外汇和 Binance 行情并管理持仓",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "publisher": "tickerdock",
   "private": false,
   "license": "MIT",
@@ -781,7 +781,20 @@
         "tickerdock.interval": {
           "type": "number",
           "default": 15000,
-          "minimum": 3000
+          "minimum": 3000,
+          "description": "股票和基金侧边栏刷新间隔，单位为毫秒"
+        },
+        "tickerdock.marketStatusBarInterval": {
+          "type": "number",
+          "default": 15000,
+          "minimum": 3000,
+          "description": "底部行情股票刷新间隔，单位为毫秒"
+        },
+        "tickerdock.portfolioStatusBarInterval": {
+          "type": "number",
+          "default": 15000,
+          "minimum": 3000,
+          "description": "底部股票和基金持仓刷新间隔，单位为毫秒"
         },
         "tickerdock.marketHoursEnabled": {
           "type": "boolean",

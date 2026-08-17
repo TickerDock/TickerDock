@@ -171,6 +171,22 @@ export class ConfigRepository {
     return Math.max(this.readCompatible<number>('interval', 15000), 3000);
   }
 
+  getMarketStatusBarInterval(): number {
+    return Math.max(workspace.getConfiguration('tickerdock').get<number>('marketStatusBarInterval', 15000), 3000);
+  }
+
+  async setMarketStatusBarInterval(intervalMs: number): Promise<void> {
+    await this.write('marketStatusBarInterval', Math.max(intervalMs, 3000));
+  }
+
+  getPortfolioStatusBarInterval(): number {
+    return Math.max(workspace.getConfiguration('tickerdock').get<number>('portfolioStatusBarInterval', 15000), 3000);
+  }
+
+  async setPortfolioStatusBarInterval(intervalMs: number): Promise<void> {
+    await this.write('portfolioStatusBarInterval', Math.max(intervalMs, 3000));
+  }
+
   getMarketHoursEnabled(): boolean {
     return workspace.getConfiguration('tickerdock').get<boolean>('marketHoursEnabled', true);
   }
@@ -512,6 +528,7 @@ export class ConfigRepository {
 
 const MIGRATABLE_BETA_KEYS = [
   'stocks', 'stockGroups', 'stockLists', 'funds', 'fundGroups', 'interval',
+  'marketStatusBarInterval', 'portfolioStatusBarInterval',
   'marketHoursEnabled', 'stockChartMode', 'heldStockHighlightEnabled',
   'sidebarDisplayMode', 'stockLabelTemplate', 'fundLabelTemplate',
   'statusBarLabelTemplate', 'stockPortfolioTemplate', 'fundPortfolioTemplate',

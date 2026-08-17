@@ -12,6 +12,8 @@ export const TRANSFERABLE_SETTING_KEYS = [
   'funds',
   'fundGroups',
   'interval',
+  'marketStatusBarInterval',
+  'portfolioStatusBarInterval',
   'marketHoursEnabled',
   'expandedStockMarkets',
   'stockChartMode',
@@ -293,6 +295,8 @@ function isValidSetting(key: TransferableSettingKey, value: unknown): boolean {
     case 'stockLists':
       return Array.isArray(value) && value.every(isStringArray);
     case 'interval':
+    case 'marketStatusBarInterval':
+    case 'portfolioStatusBarInterval':
       return isNumberAtLeast(value, 3000);
     case 'binanceInterval':
       return isNumberAtLeast(value, 5000);

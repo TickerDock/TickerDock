@@ -134,9 +134,10 @@ describe('webview UI', () => {
     const state = personalizationState();
     render(<App bootstrap={{ page: 'personalization', state, defaults: state }} />);
     await userEvent.selectOptions(screen.getByLabelText('显示模式'), 'template');
+    await userEvent.selectOptions(screen.getByLabelText('行情刷新频率'), '5000');
     await userEvent.click(screen.getByRole('button', { name: /^保存$/ }));
     expect(vi.mocked(postMessage)).toHaveBeenCalledWith('savePersonalization', {
-      value: { ...state, sidebarDisplayMode: 'template' },
+      value: { ...state, sidebarDisplayMode: 'template', marketStatusBarInterval: 5000 },
     });
   });
 
@@ -218,6 +219,7 @@ function personalizationState(): PersonalizationState {
     heldStockHighlightEnabled: true, remindersEnabled: true, marketHoursEnabled: true,
     stockChartMode: 'standard', showMarketStatusBar: true, showStockPortfolioStatusBar: true,
     showFundPortfolioStatusBar: true, showStatusBarIcons: true, statusBarStocks: ['sh000001'],
+    marketStatusBarInterval: 15000, portfolioStatusBarInterval: 15000,
     availableStocks: [{ code: 'sh000001', name: '上证指数' }, { code: 'sh600000', name: '浦发银行' }],
   };
 }

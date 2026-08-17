@@ -48,6 +48,8 @@ export function PersonalizationPage({ initial, defaults }: { initial: Personaliz
         <ToggleRow label="行情状态栏" checked={state.showMarketStatusBar} onChange={(value) => set('showMarketStatusBar', value)} />
         <ToggleRow label="股票持仓状态栏" checked={state.showStockPortfolioStatusBar} onChange={(value) => set('showStockPortfolioStatusBar', value)} />
         <ToggleRow label="基金持仓状态栏" checked={state.showFundPortfolioStatusBar} onChange={(value) => set('showFundPortfolioStatusBar', value)} />
+        <SelectRow label="行情刷新频率" value={String(state.marketStatusBarInterval)} options={refreshIntervalOptions} onChange={(value) => set('marketStatusBarInterval', Number(value))} />
+        <SelectRow label="持仓刷新频率" value={String(state.portfolioStatusBarInterval)} options={refreshIntervalOptions} onChange={(value) => set('portfolioStatusBarInterval', Number(value))} />
         <div className="setting-row"><span>状态栏股票</span><button className="secondary" type="button" onClick={() => setShowStocks(true)}>{state.statusBarStocks.length} / 8　配置</button></div>
         <ToggleRow label="自定义涨跌颜色" checked={state.useCustomStatusBarColors} onChange={(value) => set('useCustomStatusBarColors', value)} />
         <div className="setting-row"><span>涨跌颜色</span><span className="color-inputs"><label><input type="color" value={state.riseColor} aria-label="上涨颜色" onChange={(event) => set('riseColor', event.target.value)} />上涨</label><label><input type="color" value={state.fallColor} aria-label="下跌颜色" onChange={(event) => set('fallColor', event.target.value)} />下跌</label></span></div>
@@ -70,3 +72,8 @@ function SettingsSection({ title, disabled, children }: { title: string; disable
 function clone(value: PersonalizationState): PersonalizationState { return { ...value, statusBarStocks: [...value.statusBarStocks], availableStocks: [...value.availableStocks] }; }
 function templatesValid(value: PersonalizationState): boolean { return [value.stockLabelTemplate, value.fundLabelTemplate, value.statusBarLabelTemplate, value.stockPortfolioTemplate, value.fundPortfolioTemplate].every((template) => template.length > 0 && template.length <= 240); }
 const iconOptions = [{ value: 'arrow', label: '箭头' }, { value: 'arrow1', label: '反色箭头' }, { value: 'food1', label: '食物 1' }, { value: 'food2', label: '食物 2' }, { value: 'food3', label: '食物 3' }, { value: 'iconfood', label: 'Emoji 食物' }, { value: 'none', label: '无图标' }];
+const refreshIntervalOptions = [
+  { value: '3000', label: '3 秒' }, { value: '5000', label: '5 秒' },
+  { value: '10000', label: '10 秒' }, { value: '15000', label: '15 秒' },
+  { value: '30000', label: '30 秒' }, { value: '60000', label: '60 秒' },
+];

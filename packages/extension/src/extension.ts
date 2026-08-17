@@ -13,7 +13,7 @@ import {
   StockSdkFundEstimateGateway,
   XuanGuBaoFlashNewsGateway,
 } from '@tickerdock/data-sources';
-import { createCnyFxRates, FlashNewsGateway, fromStockApiCode, FundPosition, mergeFundEstimates, StockGateway, StockPosition, StockQuote, StockReminderRule, StockResearchGateway, StockIwenCaiGateway } from '@tickerdock/domain';
+import { calculateFundProfit, calculateStockProfit, createCnyFxRates, FlashNewsGateway, fromStockApiCode, FundPosition, FundQuote, mergeFundEstimates, StockGateway, StockPosition, StockQuote, StockReminderRule, StockResearchGateway, StockIwenCaiGateway } from '@tickerdock/domain';
 import { ConfigRepository, FundWatchGroup, StockWatchGroup } from './configRepository';
 import { PortfolioStatusBar } from './portfolioStatusBar';
 import {
@@ -96,6 +96,7 @@ export async function activate(context: ExtensionContext): Promise<void> {
   const newsOutput = new NewsOutputService();
   const aiOutput = new AiOutputService();
   const stockQuoteCache = new Map<string, StockQuote>();
+  const portfolioFundQuoteCache = new Map<string, FundQuote>();
   const stockTree = window.createTreeView('tickerdock.stock', { treeDataProvider: stockProvider });
   const fundTree = window.createTreeView('tickerdock.fund', { treeDataProvider: fundProvider });
   const cryptoTree = window.createTreeView('tickerdock.binance', { treeDataProvider: cryptoProvider });
@@ -210,8 +211,83 @@ export async function activate(context: ExtensionContext): Promise<void> {
     }
   };
 
+  const refreshMarketStatusBar = async (reason: RefreshReason) => {
+    const codes = config.getStatusBarStocks(['SH000001']);
+    if (codes.length === 0) {
+      marketStatusBar.updateQuotes([]);
+      return;
+    }
+    const fetchCodes = filterStockCodesForRefresh(codes, reason, config.getMarketHoursEnabled());
+    if (fetchCodes.length === 0) return;
+    try {
+      const refreshed = await stockGateway.getQuotes(fetchCodes);
+      refreshed.forEach((quote) => stockQuoteCache.set(quote.code, quote));
+      marketStatusBar.updateQuotes(codes.flatMap((code) => {
+        const quote = stockQuoteCache.get(code);
+        return quote ? [quote] : [];
+      }));
+    } catch (error) {
+      console.error('[tickerdock] Market status bar refresh failed', error);
+    }
+  };
+
+  const refreshPortfolioStatusBar = async (reason: RefreshReason) => {
+    await Promise.all([
+      (async () => {
+        if (!config.getShowStockPortfolioStatusBar()) return;
+        const positions = config.getStockPositions();
+        const codes = [...positions.keys()];
+        if (codes.length === 0) {
+          portfolioBar.updateStocks([]);
+          return;
+        }
+        const fetchCodes = filterStockCodesForRefresh(codes, reason, config.getMarketHoursEnabled());
+        if (fetchCodes.length === 0) return;
+        try {
+          const refreshed = await stockGateway.getQuotes(fetchCodes);
+          refreshed.forEach((quote) => stockQuoteCache.set(quote.code, quote));
+          portfolioBar.updateStocks(codes.flatMap((code) => {
+            const quote = stockQuoteCache.get(code);
+            const position = positions.get(code);
+            const profit = quote && position ? calculateStockProfit(quote, position) : undefined;
+            return profit ? [profit] : [];
+          }));
+        } catch (error) {
+          console.error('[tickerdock] Stock portfolio status bar refresh failed', error);
+        }
+      })(),
+      (async () => {
+        if (!config.getShowFundPortfolioStatusBar()) return;
+        const positions = config.getFundPositions();
+        const codes = [...positions.keys()];
+        if (codes.length === 0) {
+          portfolioBar.updateFunds([]);
+          return;
+        }
+        if (reason === 'scheduled' && config.getMarketHoursEnabled() && !isMarketOpen('fund')) return;
+        try {
+          const [quotes, estimates] = await Promise.all([
+            fundGateway.getQuotes(codes),
+            fundEstimateGateway.getEstimates(codes),
+          ]);
+          mergeFundEstimates(quotes, estimates).forEach((quote) => portfolioFundQuoteCache.set(quote.code, quote));
+          portfolioBar.updateFunds(codes.flatMap((code) => {
+            const quote = portfolioFundQuoteCache.get(code);
+            const position = positions.get(code);
+            const profit = quote && position ? calculateFundProfit(quote, position) : undefined;
+            return profit ? [profit] : [];
+          }));
+        } catch (error) {
+          console.error('[tickerdock] Fund portfolio status bar refresh failed', error);
+        }
+      })(),
+    ]);
+  };
+
   const stockRefresh = new RefreshController(config.getInterval(), refreshStocks);
   const fundRefresh = new RefreshController(config.getInterval(), refreshFunds);
+  const marketStatusRefresh = new RefreshController(config.getMarketStatusBarInterval(), refreshMarketStatusBar);
+  const portfolioStatusRefresh = new RefreshController(config.getPortfolioStatusBarInterval(), refreshPortfolioStatusBar);
   const cryptoRefresh = new RefreshController(config.getBinanceInterval(), async () => {
     try {
       cryptoProvider.setQuotes(await binanceGateway.getQuotes(config.getBinancePairs()));
@@ -236,7 +312,10 @@ export async function activate(context: ExtensionContext): Promise<void> {
       console.error('[tickerdock] Flash news refresh failed', error);
     }
   });
-  context.subscriptions.push(stockRefresh, fundRefresh, cryptoRefresh, forexRefresh, newsRefresh);
+  context.subscriptions.push(
+    stockRefresh, fundRefresh, marketStatusRefresh, portfolioStatusRefresh,
+    cryptoRefresh, forexRefresh, newsRefresh
+  );
   context.subscriptions.push(newsOutput.onDidChangeOpen((open) => {
     if (open) newsRefresh.start();
     else newsRefresh.stop();
@@ -245,21 +324,23 @@ export async function activate(context: ExtensionContext): Promise<void> {
     const stockPositions = config.getStockPositions();
     const hasStockReminders = config.getRemindersEnabled()
       && [...config.getStockReminders().values()].some((rules) => rules.length > 0);
-    const stockBackgroundNeeded = (config.getShowMarketStatusBar()
-        && config.getStatusBarStocks(['SH000001']).length > 0)
-      || (config.getShowStockPortfolioStatusBar() && stockPositions.size > 0)
-      || hasStockReminders;
     scheduleForVisibility(
       stockRefresh,
-      stockTree.visible || stockBackgroundNeeded,
+      stockTree.visible || hasStockReminders,
       stockTree.visible ? config.getInterval() : Math.max(config.getInterval(), BACKGROUND_REFRESH_INTERVAL_MS)
     );
 
-    const fundBackgroundNeeded = config.getShowFundPortfolioStatusBar() && config.getFundPositions().size > 0;
+    scheduleForVisibility(fundRefresh, fundTree.visible, config.getInterval());
     scheduleForVisibility(
-      fundRefresh,
-      fundTree.visible || fundBackgroundNeeded,
-      fundTree.visible ? config.getInterval() : Math.max(config.getInterval(), BACKGROUND_REFRESH_INTERVAL_MS)
+      marketStatusRefresh,
+      config.getShowMarketStatusBar() && config.getStatusBarStocks(['SH000001']).length > 0,
+      config.getMarketStatusBarInterval()
+    );
+    scheduleForVisibility(
+      portfolioStatusRefresh,
+      (config.getShowStockPortfolioStatusBar() && stockPositions.size > 0)
+        || (config.getShowFundPortfolioStatusBar() && config.getFundPositions().size > 0),
+      config.getPortfolioStatusBarInterval()
     );
     scheduleForVisibility(cryptoRefresh, cryptoTree.visible, config.getBinanceInterval());
 
@@ -412,6 +493,14 @@ export async function activate(context: ExtensionContext): Promise<void> {
       updateStatusBarOptions(config, portfolioBar, marketStatusBar);
       if (affectsAnyConfiguration(event, ['stocks', 'stockGroups', 'stockLists', 'stockPrice'])) void stockRefresh.refreshNow();
       if (affectsAnyConfiguration(event, ['funds', 'fundGroups', 'fundAmount'])) void fundRefresh.refreshNow();
+      if (affectsAnyConfiguration(event, ['stocks', 'stockGroups', 'stockLists', 'statusBarStocks', 'showMarketStatusBar'])) {
+        void marketStatusRefresh.refreshNow();
+      }
+      if (affectsAnyConfiguration(event, [
+        'stockPrice', 'fundAmount', 'showStockPortfolioStatusBar', 'showFundPortfolioStatusBar',
+      ])) {
+        void portfolioStatusRefresh.refreshNow();
+      }
     }
     if (event.affectsConfiguration('tickerdock.binanceInterval')) {
       cryptoRefresh.updateInterval(config.getBinanceInterval());
@@ -449,14 +538,31 @@ function scheduleForVisibility(controller: RefreshController, active: boolean, i
 }
 
 function backgroundStockCodes(config: ConfigRepository, watchedCodes: readonly string[]): string[] {
-  const required = new Set(config.getStatusBarStocks(['SH000001']));
-  config.getStockPositions().forEach((_, code) => required.add(code));
+  const required = new Set<string>();
   if (config.getRemindersEnabled()) {
     config.getStockReminders().forEach((rules, code) => {
       if (rules.length > 0) required.add(code);
     });
   }
   return watchedCodes.filter((code) => required.has(code));
+}
+
+function filterStockCodesForRefresh(
+  codes: readonly string[],
+  reason: RefreshReason,
+  marketHoursEnabled: boolean
+): string[] {
+  if (reason !== 'scheduled' || !marketHoursEnabled) return [...codes];
+  const marketOpen = new Map<NonNullable<ReturnType<typeof marketForStockCode>>, boolean>();
+  return codes.filter((code) => {
+    const market = marketForStockCode(code);
+    if (market === undefined) return true;
+    const cached = marketOpen.get(market);
+    if (cached !== undefined) return cached;
+    const open = isMarketOpen(market);
+    marketOpen.set(market, open);
+    return open;
+  });
 }
 
 function affectsAnyConfiguration(

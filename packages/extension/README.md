@@ -98,6 +98,8 @@ TickerDock 是一款面向中文用户的 VS Code 行情侧边栏扩展。无需
 | 配置项 | 说明 | 默认值 |
 | --- | --- | --- |
 | `tickerdock.interval` | 股票和基金前台刷新间隔，单位为毫秒 | `15000` |
+| `tickerdock.marketStatusBarInterval` | 底部行情股票刷新间隔，单位为毫秒 | `15000` |
+| `tickerdock.portfolioStatusBarInterval` | 底部股票和基金持仓刷新间隔，单位为毫秒 | `15000` |
 | `tickerdock.marketHoursEnabled` | 仅在对应市场交易时段自动刷新 | `true` |
 | `tickerdock.binanceInterval` | Binance 刷新间隔，单位为毫秒 | `10000` |
 | `tickerdock.forexInterval` | 外汇刷新间隔，单位为毫秒 | `3600000` |
@@ -114,8 +116,8 @@ TickerDock 是一款面向中文用户的 VS Code 行情侧边栏扩展。无需
 
 TickerDock 随 VS Code 启动，以便及时创建底部状态栏，但后台任务会根据实际需求调度：
 
-- 股票视图隐藏后，只低频刷新状态栏、持仓和提醒真正依赖的股票；
-- 基金视图隐藏且没有基金持仓时，停止基金刷新；
+- 底部行情与持仓使用独立刷新间隔，默认每 15 秒刷新，最低可设为 3 秒；
+- 股票视图隐藏后，提醒轮询最低间隔为 60 秒；基金视图隐藏后停止侧边栏刷新；
 - 隐藏状态下只估值持仓基金，并限制估值请求并发数；
 - Binance 仅在对应视图可见时轮询；
 - 外汇仅在视图可见或外币持仓需要换算时刷新；
