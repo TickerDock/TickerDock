@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { authenticateProxyUrl, isTrustedProxySubresource, rewriteEastMoneyText } from '../src/eastMoneyProxy';
+import { Readable } from 'node:stream';
+import { authenticateProxyUrl, createEastMoneyRewriteStream, isTrustedProxySubresource, rewriteEastMoneyText } from '../src/eastMoneyProxy';
 
 describe('EastMoney local proxy', () => {
   it('rewrites normal, protocol-relative, and JSON-escaped quote URLs', () => {
@@ -17,6 +18,27 @@ describe('EastMoney local proxy', () => {
   it('removes an embedded CSP meta tag from proxied HTML', () => {
     const html = '<head><meta http-equiv="Content-Security-Policy" content="frame-ancestors none"><title>Quote</title></head>';
     expect(rewriteEastMoneyText(html, 'http://localhost:16100')).toBe('<head><title>Quote</title></head>');
+  });
+
+  it('streams rewrites safely across chunk boundaries', async () => {
+    const transform = createEastMoneyRewriteStream('http://localhost:16100', true);
+    const output: Buffer[] = [];
+    transform.on('data', (chunk: Buffer) => output.push(chunk));
+    await new Promise<void>((resolve, reject) => {
+      transform.on('end', resolve);
+      transform.on('error', reject);
+      Readable.from([
+        '<head><me',
+        'ta http-equiv="Content-Security-Policy" content="frame-ancestors none">',
+        '<script>const url="https://quote.east',
+        'money.com/basic/main.js";const escaped="https:\\/\\/quote.eastmoney.com\\/api";</script></head>',
+      ]).pipe(transform);
+    });
+    const html = Buffer.concat(output).toString('utf8');
+    expect(html).not.toContain('Content-Security-Policy');
+    expect(html).not.toContain('quote.eastmoney.com');
+    expect(html).toContain('http://localhost:16100/basic/main.js');
+    expect(html).toContain('http:\\/\\/localhost:16100\\/api');
   });
 
   it('adds an unguessable proxy token only to local proxy URLs', () => {

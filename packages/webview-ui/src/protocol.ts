@@ -103,6 +103,7 @@ export type HostMessage = {
   type: 'saveSectors' | 'saveStockPositions' | 'saveFundPositions' | 'savePersonalization' | 'saveAiSettings'
     | 'resetPersonalization' | 'saveStatusBarStocks' | 'openResearchUrl' | 'setDirty' | 'changeFundComparisonRange'
     | 'selectFundOverviewFund' | 'changeFundOverviewRange' | 'changeFundTrendRange' | 'changeStockChartMode' | 'changeStockKlinePeriod'
+    | 'stockMarketFrameLoaded'
     | 'openLeekExternal' | 'refreshLeekWatchlist' | 'openLeekWatchlistDetails' | 'loadLeekStockDetails' | 'deleteAiKey'
     | 'requestAiKey' | 'marketSentimentReady';
   requestId: string;

@@ -80,11 +80,13 @@ async function showMarketHistory(
   initialMode: StockChartMode,
   onModeChange?: (mode: StockChartMode) => void | Promise<void>
 ): Promise<void> {
+  const startedAt = performance.now();
   let currentPanel: WebviewPanel | undefined;
   stockMessages?.dispose();
   stockMessages = undefined;
   try {
     const proxy = await getEastMoneyProxy();
+    const proxyReadyAt = performance.now();
     const panel = acquireStockPanel(title, extensionUri, proxy.port);
     currentPanel = panel;
     const rawTargets = buildStockIframeTargets(code, proxy.origin);
@@ -93,8 +95,20 @@ async function showMarketHistory(
       chips: rawTargets.chips ? authenticateProxyUrl(rawTargets.chips, proxy) : undefined,
     };
     let mode: StockChartMode = initialMode === 'chips' && targets.chips ? 'chips' : 'standard';
-    const render = () => { panel.webview.html = renderWebviewUi(panel.webview, extensionUri, { page: 'stockMarketFrame', title, targets, mode }); };
+    let renderedAt = performance.now();
+    const render = () => {
+      renderedAt = performance.now();
+      panel.webview.html = renderWebviewUi(panel.webview, extensionUri, { page: 'stockMarketFrame', title, targets, mode });
+    };
     stockMessages = panel.webview.onDidReceiveMessage((message: unknown) => {
+      if (readWebviewEnvelope(message, 'stockMarketFrameLoaded')) {
+        const loadedAt = performance.now();
+        console.debug(
+          `[tickerdock] Stock frame ${code} proxy=${Math.round(proxyReadyAt - startedAt)}ms`
+            + ` webview+iframe=${Math.round(loadedAt - renderedAt)}ms total=${Math.round(loadedAt - startedAt)}ms`
+        );
+        return;
+      }
       const payload = readWebviewEnvelope(message, 'changeStockChartMode');
       const requested = payload?.mode === 'standard' || payload?.mode === 'chips' ? payload.mode : undefined;
       if (!requested || (requested === 'chips' && !targets.chips)) return;
@@ -143,7 +157,7 @@ export async function showFundHistory(
 function createPanel(viewType: string, title: string, localPort?: number, localRoot?: Uri): WebviewPanel {
   return window.createWebviewPanel(viewType, title, ViewColumn.One, {
     enableScripts: true,
-    retainContextWhenHidden: false,
+    retainContextWhenHidden: viewType === 'tickerdockStockTrend',
     ...(localPort ? {
       portMapping: [{ webviewPort: localPort, extensionHostPort: localPort }],
     } : {}),

@@ -7,7 +7,6 @@ import {
   CryptoGateway,
   CryptoQuote,
   FundGateway,
-  FundEstimate,
   FundEstimateGateway,
   FlashNewsGateway,
   FlashNewsItem,
@@ -46,18 +45,6 @@ import {
 
 type StockApiClient = typeof stocks.auto;
 type FundApiClient = typeof funds.auto;
-
-interface StockSdkFundClient {
-  fund: {
-    estimate: (code: string) => Promise<{
-      code: string;
-      navDate: string | null;
-      estimatedNav: number | null;
-      estimatedChangePercent: number | null;
-      estimateTime: string | null;
-    }>;
-  };
-}
 
 interface StockSdkMarketClient {
   board: {
@@ -112,7 +99,6 @@ type SdkSectorFundFlowRankRow = {
 };
 
 const defaultStockSdk = createStockSdk();
-const FUND_ESTIMATE_CONCURRENCY = 4;
 
 export class StockApiGateway implements StockGateway {
   constructor(private readonly client: StockApiClient = stocks.auto) {}
@@ -266,34 +252,9 @@ export class FundApiGateway implements FundGateway {
   }
 }
 
-export class StockSdkFundEstimateGateway implements FundEstimateGateway {
-  private readonly sdk: StockSdkFundClient;
-
-  constructor(request: typeof fetch = fetch, sdk?: StockSdkFundClient) {
-    this.sdk = sdk ?? (request === fetch ? defaultStockSdk : createStockSdk(request));
-  }
-
-  async getEstimates(codes: readonly string[]): Promise<FundEstimate[]> {
-    const results: PromiseSettledResult<FundEstimate | undefined>[] = [];
-    for (let index = 0; index < codes.length; index += FUND_ESTIMATE_CONCURRENCY) {
-      results.push(...await Promise.allSettled(
-        codes.slice(index, index + FUND_ESTIMATE_CONCURRENCY).map((code) => this.getEstimate(code))
-      ));
-    }
-    return results.flatMap((result) => result.status === 'fulfilled' && result.value ? [result.value] : []);
-  }
-
-  private async getEstimate(code: string): Promise<FundEstimate | undefined> {
-    const value = await this.sdk.fund.estimate(code);
-    if (value.estimatedNav === null || value.estimatedChangePercent === null) return undefined;
-    return {
-      code: value.code || code,
-      estimatedNav: value.estimatedNav,
-      estimatedChangeRatio: value.estimatedChangePercent / 100,
-      estimateTime: value.estimateTime || '',
-      confirmedNavDate: value.navDate || '',
-      source: 'stock-sdk',
-    };
+export class ConfirmedNavOnlyFundEstimateGateway implements FundEstimateGateway {
+  getEstimates(_codes: readonly string[]): Promise<[]> {
+    return Promise.resolve([]);
   }
 }
 

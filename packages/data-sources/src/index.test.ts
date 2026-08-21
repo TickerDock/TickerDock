@@ -23,7 +23,7 @@ import {
   parseEastMoneyFundDiagnosis,
   parseEastMoneyFundInstitutionRatings,
   SinaFuturesGateway,
-  StockSdkFundEstimateGateway,
+  ConfirmedNavOnlyFundEstimateGateway,
   StockApiGateway,
   XuanGuBaoFlashNewsGateway,
   XueqiuGateway,
@@ -129,47 +129,10 @@ describe('FundApiGateway', () => {
   });
 });
 
-describe('StockSdkFundEstimateGateway', () => {
-  it('normalizes stock-sdk percentage points', async () => {
-    const sdk = { fund: { estimate: async () => ({
-      code: '110022', navDate: '2026-07-15', estimatedNav: 2.84,
-      estimatedChangePercent: 3.2352, estimateTime: '2026-07-16 14:30',
-    }) } };
-    const gateway = new StockSdkFundEstimateGateway(fetch, sdk);
-    await expect(gateway.getEstimates(['110022'])).resolves.toEqual([{
-      code: '110022', estimatedNav: 2.84, estimatedChangeRatio: 0.032352,
-      estimateTime: '2026-07-16 14:30', confirmedNavDate: '2026-07-15', source: 'stock-sdk',
-    }]);
-  });
-
-  it('ignores unavailable stock-sdk estimates', async () => {
-    const sdk = { fund: { estimate: async (code: string) => ({
-      code, navDate: null, estimatedNav: null,
-      estimatedChangePercent: null, estimateTime: null,
-    }) } };
-    const gateway = new StockSdkFundEstimateGateway(fetch, sdk);
-
+describe('ConfirmedNavOnlyFundEstimateGateway', () => {
+  it('returns no estimates after the upstream fund estimate endpoint was retired', async () => {
+    const gateway = new ConfirmedNavOnlyFundEstimateGateway();
     await expect(gateway.getEstimates(['110022'])).resolves.toEqual([]);
-  });
-
-  it('limits concurrent estimate requests', async () => {
-    let active = 0;
-    let peak = 0;
-    const sdk = { fund: { estimate: async (code: string) => {
-      active += 1;
-      peak = Math.max(peak, active);
-      await Promise.resolve();
-      active -= 1;
-      return {
-        code, navDate: '2026-07-15', estimatedNav: 1,
-        estimatedChangePercent: 0, estimateTime: '2026-07-16 14:30',
-      };
-    } } };
-    const gateway = new StockSdkFundEstimateGateway(fetch, sdk);
-
-    await expect(gateway.getEstimates(Array.from({ length: 10 }, (_, index) => String(index))))
-      .resolves.toHaveLength(10);
-    expect(peak).toBe(4);
   });
 });
 

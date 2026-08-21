@@ -2,10 +2,19 @@ import { StockGateway, StockIwenCaiGateway, StockResearchGateway } from '@ticker
 import { researchKeywordForStockCode } from './stockAnalysisModel';
 import { buildStockExtendedDetail } from './stockExtendedDetailModel';
 
+export function loadBasicStockExtendedDetail(
+  stockGateway: StockGateway,
+  researchGateway: StockResearchGateway,
+  code: string,
+  name: string
+) {
+  return loadStockExtendedDetail(stockGateway, researchGateway, undefined, code, name);
+}
+
 export async function loadStockExtendedDetail(
   stockGateway: StockGateway,
   researchGateway: StockResearchGateway,
-  iwencaiGateway: StockIwenCaiGateway,
+  iwencaiGateway: StockIwenCaiGateway | undefined,
   code: string,
   name: string,
   hexinToken?: string
@@ -16,13 +25,13 @@ export async function loadStockExtendedDetail(
     stockGateway.getQuotes([code]),
     stockGateway.getKlines(code, { period: 'day', count: 120, adjust: 'qfq' }),
     researchKeyword ? researchGateway.search(researchKeyword, 10) : Promise.resolve([]),
-    supportsIwenCai && hexinToken ? iwencaiGateway.getInsights(code, name, hexinToken) : Promise.resolve(undefined),
+    supportsIwenCai && hexinToken && iwencaiGateway ? iwencaiGateway.getInsights(code, name, hexinToken) : Promise.resolve(undefined),
   ]);
   if (quoteResult.status !== 'fulfilled' || !quoteResult.value[0]) {
     throw quoteResult.status === 'rejected' ? quoteResult.reason : new Error(`No quote returned for ${code}.`);
   }
   const unavailable: string[] = [];
-  if (supportsIwenCai && !hexinToken) unavailable.push('The browser token for iWencai could not be generated.');
+  if (supportsIwenCai && iwencaiGateway && !hexinToken) unavailable.push('The browser token for iWencai could not be generated.');
   if (iwencaiResult.status === 'rejected') unavailable.push('iWencai diagnosis, concepts, heat, and official levels were unavailable.');
   if (klineResult.status === 'rejected') unavailable.push('Technical K-lines were unavailable.');
   if (researchResult.status === 'rejected') unavailable.push('Jiuyangongshe research was unavailable.');

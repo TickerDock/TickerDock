@@ -10,10 +10,10 @@ import {
   Jin10FlashNewsGateway,
   IwenCaiStockInsightsGateway,
   JiuyangongsheResearchGateway,
-  StockSdkFundEstimateGateway,
+  ConfirmedNavOnlyFundEstimateGateway,
   XuanGuBaoFlashNewsGateway,
 } from '@tickerdock/data-sources';
-import { calculateFundProfit, calculateStockProfit, createCnyFxRates, FlashNewsGateway, fromStockApiCode, FundPosition, FundQuote, mergeFundEstimates, StockGateway, StockPosition, StockQuote, StockReminderRule, StockResearchGateway, StockIwenCaiGateway } from '@tickerdock/domain';
+import { calculateFundProfit, calculateStockProfit, createCnyFxRates, FlashNewsGateway, fromStockApiCode, FundEstimateGateway, FundPosition, FundQuote, mergeFundEstimates, StockGateway, StockPosition, StockQuote, StockReminderRule, StockResearchGateway } from '@tickerdock/domain';
 import { ConfigRepository, FundWatchGroup, StockWatchGroup } from './configRepository';
 import { PortfolioStatusBar } from './portfolioStatusBar';
 import {
@@ -54,7 +54,7 @@ import { loadStockExtendedDetail } from './stockExtendedDetailLoader';
 import { researchKeywordForStockCode } from './stockAnalysisModel';
 import { showPersonalization } from './personalizationView';
 import { showBinanceIframe } from './binanceIframeView';
-import { stopEastMoneyProxy } from './eastMoneyProxy';
+import { getEastMoneyProxy, stopEastMoneyProxy } from './eastMoneyProxy';
 import { pickSearchResult } from './searchQuickPick';
 
 const DEFAULT_STOCKS = ['SH000001', 'SH000300', 'HK00700', 'USIXIC'];
@@ -63,12 +63,15 @@ const BACKGROUND_REFRESH_INTERVAL_MS = 60_000;
 
 export async function activate(context: ExtensionContext): Promise<void> {
   context.subscriptions.push({ dispose: stopEastMoneyProxy });
+  void getEastMoneyProxy().catch((error) => {
+    console.error('[tickerdock] EastMoney proxy warm-up failed', error);
+  });
   const config = new ConfigRepository();
   await config.migrateBetaNamespace();
   const secrets = new SecretRepository(context.secrets);
   const stockGateway = new CompositeStockGateway();
   const fundGateway = new FundApiGateway();
-  const fundEstimateGateway = new StockSdkFundEstimateGateway();
+  const fundEstimateGateway = new ConfirmedNavOnlyFundEstimateGateway();
   const binanceGateway = new BinanceGateway();
   const forexGateway = new BocForexGateway();
   const flashNewsGateway = new Jin10FlashNewsGateway();
@@ -367,7 +370,7 @@ export async function activate(context: ExtensionContext): Promise<void> {
 
   registerCommands(
     context, config, stockGateway, fundGateway,
-    stockProvider, fundProvider, fundInsightsGateway, fundEstimateGateway, stockResearchGateway, iwencaiGateway,
+    stockProvider, fundProvider, fundInsightsGateway, fundEstimateGateway, stockResearchGateway,
     context.extensionUri, stockRefresh, fundRefresh
   );
   registerMarketCommands(context, config, binanceGateway, cryptoProvider, cryptoRefresh, forexRefresh);
@@ -389,7 +392,7 @@ export async function activate(context: ExtensionContext): Promise<void> {
       return getLeekCenterWatchlist();
     },
     openWatchlistDetails: (kind, code, name) => kind === 'stock'
-      ? showStockExtendedDetails(stockGateway, stockResearchGateway, iwencaiGateway, context.extensionUri, code, name)
+      ? showStockExtendedDetails(stockGateway, stockResearchGateway, context.extensionUri, code, name)
       : showFundDetails(fundInsightsGateway, context.extensionUri, code, name),
     loadStockDetails: (code, name, token) => loadStockExtendedDetail(stockGateway, stockResearchGateway, iwencaiGateway, code, name, token),
   });
@@ -737,9 +740,8 @@ function registerCommands(
   stockProvider: StockQuoteProvider,
   fundProvider: FundQuoteProvider,
   fundInsightsGateway: EastMoneyFundInsightsGateway,
-  fundEstimateGateway: StockSdkFundEstimateGateway,
+  fundEstimateGateway: FundEstimateGateway,
   stockResearchGateway: StockResearchGateway,
-  iwencaiGateway: StockIwenCaiGateway,
   extensionUri: Uri,
   stockRefresh: RefreshController,
   fundRefresh: RefreshController
@@ -759,7 +761,7 @@ function registerCommands(
     commands.registerCommand('tickerdock.viewStockDetails', (item: StockQuoteTreeItem) =>
       isIndexStock(item.code, item.name)
         ? showStockKline(stockGateway, extensionUri, item.code, item.name)
-        : showStockExtendedDetails(stockGateway, stockResearchGateway, iwencaiGateway, extensionUri, item.code, item.name)),
+        : showStockExtendedDetails(stockGateway, stockResearchGateway, extensionUri, item.code, item.name)),
     commands.registerCommand('tickerdock.viewFundHistory', (item: FundQuoteTreeItem) =>
       showFundHistory(fundGateway, extensionUri, item.code, item.name)),
     commands.registerCommand('tickerdock.viewFundDetails', (item: FundQuoteTreeItem) =>

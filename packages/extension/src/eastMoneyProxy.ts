@@ -1,11 +1,33 @@
 import { createServer, IncomingHttpHeaders, IncomingMessage, Server, ServerResponse } from 'node:http';
 import { request as httpsRequest } from 'node:https';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
+import { Transform, TransformCallback } from 'node:stream';
+import { StringDecoder } from 'node:string_decoder';
 
 const EAST_MONEY_ORIGIN = 'https://quote.eastmoney.com';
 const MAX_REWRITE_BYTES = 12 * 1024 * 1024;
 const AUTH_QUERY = '__stock_fund_token';
 const AUTH_COOKIE = 'stock_fund_proxy';
+const CACHE_TTL_MS = 5 * 60_000;
+const CACHE_MAX_ENTRIES = 64;
+const CACHE_MAX_BYTES = 8 * 1024 * 1024;
+const CACHE_ENTRY_MAX_BYTES = 512 * 1024;
+const STATIC_RESOURCE = /\.(?:css|js|mjs|json|png|jpe?g|gif|svg|webp|ico|woff2?|ttf)(?:$|\/)/i;
+const URL_REWRITES = [
+  { source: 'https:\\/\\/quote.eastmoney.com', escaped: true },
+  { source: 'http:\\/\\/quote.eastmoney.com', escaped: true },
+  { source: 'https://quote.eastmoney.com', escaped: false },
+  { source: 'http://quote.eastmoney.com', escaped: false },
+  { source: '//quote.eastmoney.com', escaped: false },
+] as const;
+const MAX_REWRITE_SOURCE_LENGTH = Math.max(...URL_REWRITES.map(({ source }) => source.length), '<meta'.length);
+
+interface CachedResponse {
+  statusCode: number;
+  headers: IncomingHttpHeaders;
+  body: Buffer;
+  expiresAt: number;
+}
 
 export interface EastMoneyProxy {
   origin: string;
@@ -16,6 +38,8 @@ export interface EastMoneyProxy {
 let service: EastMoneyProxy | undefined;
 let server: Server | undefined;
 let starting: Promise<EastMoneyProxy> | undefined;
+const responseCache = new Map<string, CachedResponse>();
+let responseCacheBytes = 0;
 
 export function getEastMoneyProxy(): Promise<EastMoneyProxy> {
   if (service) return Promise.resolve(service);
@@ -26,6 +50,8 @@ export function getEastMoneyProxy(): Promise<EastMoneyProxy> {
 
 export function stopEastMoneyProxy(): void {
   service = undefined;
+  responseCache.clear();
+  responseCacheBytes = 0;
   const active = server;
   server = undefined;
   active?.close();
@@ -48,6 +74,7 @@ export function rewriteEastMoneyText(body: string, proxyOrigin: string): string 
 }
 
 function startProxy(): Promise<EastMoneyProxy> {
+  const startedAt = performance.now();
   return new Promise((resolve, reject) => {
     const created = createServer((request, response) => proxyRequest(request, response));
     created.once('error', reject);
@@ -62,12 +89,14 @@ function startProxy(): Promise<EastMoneyProxy> {
       }
       server = created;
       service = { port: address.port, origin: `http://localhost:${address.port}`, token: randomBytes(24).toString('base64url') };
+      console.debug(`[tickerdock] EastMoney proxy listening in ${elapsed(startedAt)}ms`);
       resolve(service);
     });
   });
 }
 
 function proxyRequest(request: IncomingMessage, response: ServerResponse): void {
+  const startedAt = performance.now();
   if (request.method === 'OPTIONS') {
     if (!isAllowedCorsOrigin(request.headers.origin)) {
       response.writeHead(403);
@@ -98,6 +127,16 @@ function proxyRequest(request: IncomingMessage, response: ServerResponse): void 
     return;
   }
   const upstreamUrl = new URL(`${localUrl.pathname}${localUrl.search}`, EAST_MONEY_ORIGIN);
+  const cacheKey = `${localUrl.pathname}${localUrl.search}`;
+  const cached = request.method === 'GET' ? getCachedResponse(cacheKey) : undefined;
+  if (cached) {
+    const headers = { ...cached.headers, 'content-length': String(cached.body.length) };
+    writeCorsHeaders(request, response, headers);
+    response.writeHead(cached.statusCode, headers);
+    response.end(cached.body);
+    logProxyTiming(cacheKey, startedAt, startedAt, startedAt, cached.body.length, 'hit');
+    return;
+  }
   const headers: IncomingHttpHeaders = { ...request.headers };
   delete headers.host;
   delete headers.connection;
@@ -111,7 +150,9 @@ function proxyRequest(request: IncomingMessage, response: ServerResponse): void 
   const upstream = httpsRequest(upstreamUrl, {
     method: request.method,
     headers,
-  }, (upstreamResponse) => handleUpstreamResponse(request, response, upstreamResponse));
+  }, (upstreamResponse) => handleUpstreamResponse(
+    request, response, upstreamResponse, cacheKey, startedAt, performance.now()
+  ));
   upstream.on('error', (error) => {
     if (response.headersSent) return response.destroy(error);
     response.writeHead(502, { 'content-type': 'text/plain; charset=utf-8' });
@@ -123,39 +164,197 @@ function proxyRequest(request: IncomingMessage, response: ServerResponse): void 
 function handleUpstreamResponse(
   request: IncomingMessage,
   response: ServerResponse,
-  upstream: IncomingMessage
+  upstream: IncomingMessage,
+  cacheKey: string,
+  startedAt: number,
+  upstreamAt: number
 ): void {
   const headers = sanitizeResponseHeaders(upstream.headers);
   const contentType = String(headers['content-type'] ?? '').toLowerCase();
   const rewrite = /(?:text\/(?:html|css)|javascript|json)/.test(contentType);
+  const statusCode = upstream.statusCode ?? 502;
+  const cacheable = request.method === 'GET' && statusCode === 200 && STATIC_RESOURCE.test(new URL(cacheKey, EAST_MONEY_ORIGIN).pathname)
+    && !/(?:no-cache|no-store|private|max-age\s*=\s*0)/i.test(String(upstream.headers['cache-control'] ?? ''));
+  const chunks: Buffer[] = [];
+  let size = 0;
+  let firstByteAt = 0;
+  let cacheOverflow = false;
+  const capture = (chunk: Buffer | string) => {
+    const value = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    if (!firstByteAt) firstByteAt = performance.now();
+    size += value.length;
+    if (cacheable && !cacheOverflow) {
+      if (size <= CACHE_ENTRY_MAX_BYTES) chunks.push(value);
+      else { cacheOverflow = true; chunks.length = 0; }
+    }
+  };
+  const complete = () => {
+    if (cacheable && !cacheOverflow) setCachedResponse(cacheKey, statusCode, headers, Buffer.concat(chunks));
+    logProxyTiming(cacheKey, startedAt, upstreamAt, firstByteAt || performance.now(), size, cacheable ? 'miss' : 'skip');
+  };
+
   if (!rewrite) {
     writeCorsHeaders(request, response, headers);
-    response.writeHead(upstream.statusCode ?? 502, headers);
+    response.writeHead(statusCode, headers);
+    upstream.on('data', capture);
+    upstream.on('end', complete);
     upstream.pipe(response);
     return;
   }
 
-  const chunks: Buffer[] = [];
-  let size = 0;
-  upstream.on('data', (chunk: Buffer | string) => {
-    const value = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
-    size += value.length;
-    if (size <= MAX_REWRITE_BYTES) chunks.push(value);
-  });
-  upstream.on('end', () => {
-    delete headers['content-length'];
-    delete headers['content-encoding'];
-    writeCorsHeaders(request, response, headers);
-    response.writeHead(upstream.statusCode ?? 502, headers);
-    if (size > MAX_REWRITE_BYTES) {
-      response.end('EastMoney proxy response exceeded the rewrite limit.');
-      return;
-    }
-    const origin = service?.origin;
-    const body = Buffer.concat(chunks).toString('utf8');
-    response.end(origin ? rewriteEastMoneyText(body, origin) : body);
+  delete headers['content-length'];
+  delete headers['content-encoding'];
+  writeCorsHeaders(request, response, headers);
+  response.writeHead(statusCode, headers);
+  const origin = service?.origin;
+  if (!origin) {
+    upstream.on('data', capture);
+    upstream.on('end', complete);
+    upstream.pipe(response);
+    return;
+  }
+  const transform = createEastMoneyRewriteStream(origin, contentType.includes('text/html'));
+  transform.on('data', capture);
+  transform.on('end', complete);
+  transform.on('error', (error) => {
+    upstream.destroy();
+    response.destroy(error);
   });
   upstream.on('error', (error) => response.destroy(error));
+  upstream.pipe(transform).pipe(response);
+}
+
+export function createEastMoneyRewriteStream(proxyOrigin: string, stripCspMeta = false): Transform {
+  return new EastMoneyRewriteTransform(proxyOrigin, stripCspMeta);
+}
+
+class EastMoneyRewriteTransform extends Transform {
+  private readonly decoder = new StringDecoder('utf8');
+  private pending = '';
+  private size = 0;
+
+  constructor(private readonly proxyOrigin: string, private readonly stripCspMeta: boolean) {
+    super();
+  }
+
+  override _transform(chunk: Buffer, _encoding: BufferEncoding, callback: TransformCallback): void {
+    this.size += chunk.length;
+    if (this.size > MAX_REWRITE_BYTES) {
+      callback(new Error('EastMoney proxy response exceeded the rewrite limit.'));
+      return;
+    }
+    this.pending += this.decoder.write(chunk);
+    const processed = consumeRewrites(this.pending, this.proxyOrigin, this.stripCspMeta, false);
+    this.pending = processed.pending;
+    if (processed.output) this.push(processed.output);
+    callback();
+  }
+
+  override _flush(callback: TransformCallback): void {
+    this.pending += this.decoder.end();
+    const processed = consumeRewrites(this.pending, this.proxyOrigin, this.stripCspMeta, true);
+    if (processed.output) this.push(processed.output);
+    callback();
+  }
+}
+
+function consumeRewrites(
+  value: string,
+  proxyOrigin: string,
+  stripCspMeta: boolean,
+  flush: boolean
+): { output: string; pending: string } {
+  const lower = value.toLowerCase();
+  const escapedOrigin = proxyOrigin.replace(/\//g, '\\/');
+  let output = '';
+  let index = 0;
+  while (index < value.length) {
+    if (stripCspMeta && lower.startsWith('<meta', index)) {
+      const end = value.indexOf('>', index + 5);
+      if (end < 0 && !flush) break;
+      const tagEnd = end < 0 ? value.length : end + 1;
+      const tag = value.slice(index, tagEnd);
+      if (!/http-equiv=["']?content-security-policy["']?/i.test(tag)) output += rewriteEastMoneyOrigins(tag, proxyOrigin);
+      index = tagEnd;
+      continue;
+    }
+    const rewrite = URL_REWRITES.find(({ source }) => lower.startsWith(source.toLowerCase(), index));
+    if (rewrite) {
+      output += rewrite.escaped ? escapedOrigin : proxyOrigin;
+      index += rewrite.source.length;
+      continue;
+    }
+    if (!flush && value.length - index < MAX_REWRITE_SOURCE_LENGTH) {
+      const suffix = lower.slice(index);
+      const partialUrl = URL_REWRITES.some(({ source }) => source.toLowerCase().startsWith(suffix));
+      const partialMeta = stripCspMeta && '<meta'.startsWith(suffix);
+      if (partialUrl || partialMeta) break;
+    }
+    output += value[index];
+    index += 1;
+  }
+  return { output, pending: value.slice(index) };
+}
+
+function rewriteEastMoneyOrigins(body: string, proxyOrigin: string): string {
+  const escapedOrigin = proxyOrigin.replace(/\//g, '\\/');
+  return body
+    .replace(/https?:\\\/\\\/quote\.eastmoney\.com/gi, escapedOrigin)
+    .replace(/https?:\/\/quote\.eastmoney\.com/gi, proxyOrigin)
+    .replace(/\/\/quote\.eastmoney\.com/gi, proxyOrigin);
+}
+
+function getCachedResponse(key: string): CachedResponse | undefined {
+  const cached = responseCache.get(key);
+  if (!cached) return undefined;
+  if (cached.expiresAt <= Date.now()) {
+    responseCache.delete(key);
+    responseCacheBytes -= cached.body.length;
+    return undefined;
+  }
+  responseCache.delete(key);
+  responseCache.set(key, cached);
+  return cached;
+}
+
+function setCachedResponse(key: string, statusCode: number, headers: IncomingHttpHeaders, body: Buffer): void {
+  if (!body.length || body.length > CACHE_ENTRY_MAX_BYTES) return;
+  const existing = responseCache.get(key);
+  if (existing) responseCacheBytes -= existing.body.length;
+  const cachedHeaders = { ...headers };
+  delete cachedHeaders['set-cookie'];
+  delete cachedHeaders['transfer-encoding'];
+  delete cachedHeaders.connection;
+  delete cachedHeaders['content-length'];
+  responseCache.set(key, { statusCode, headers: cachedHeaders, body, expiresAt: Date.now() + CACHE_TTL_MS });
+  responseCacheBytes += body.length;
+  while (responseCache.size > CACHE_MAX_ENTRIES || responseCacheBytes > CACHE_MAX_BYTES) {
+    const oldestKey = responseCache.keys().next().value as string | undefined;
+    if (!oldestKey) break;
+    const oldest = responseCache.get(oldestKey);
+    responseCache.delete(oldestKey);
+    responseCacheBytes -= oldest?.body.length ?? 0;
+  }
+}
+
+function logProxyTiming(
+  path: string,
+  startedAt: number,
+  upstreamAt: number,
+  firstByteAt: number,
+  bytes: number,
+  cache: 'hit' | 'miss' | 'skip'
+): void {
+  const total = performance.now() - startedAt;
+  if (total < 100 && cache !== 'hit') return;
+  console.debug(
+    `[tickerdock] EastMoney proxy ${path} cache=${cache} headers=${Math.round(upstreamAt - startedAt)}ms`
+      + ` ttfb=${Math.round(firstByteAt - startedAt)}ms total=${Math.round(total)}ms bytes=${bytes}`
+  );
+}
+
+function elapsed(startedAt: number): number {
+  return Math.round(performance.now() - startedAt);
 }
 
 function sanitizeResponseHeaders(source: IncomingHttpHeaders): IncomingHttpHeaders {
