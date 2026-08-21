@@ -42,6 +42,7 @@ pnpm package:vsix
 
 ```bash
 pnpm install
+pnpm bump-version
 pnpm typecheck
 pnpm lint
 pnpm test
@@ -52,6 +53,8 @@ pnpm package:vsix
 ```
 
 `pnpm release:check` 会依次执行检查、集成测试和 VSIX 打包。
+
+发布前可运行 `pnpm bump-version` 同时更新根清单和扩展清单，默认递增 patch 版本。也可以传入 `minor`、`major` 或指定版本（例如 `pnpm bump-version 0.2.0`）；添加 `--dry-run` 可只预览结果。
 
 ## 使用说明
 

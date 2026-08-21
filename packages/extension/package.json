@@ -2,7 +2,7 @@
   "name": "tickerdock",
   "displayName": "TickerDock",
   "description": "在 VS Code 侧边栏快速查看股票、基金、期货、外汇和 Binance 行情并管理持仓",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "publisher": "tickerdock",
   "private": false,
   "license": "MIT",

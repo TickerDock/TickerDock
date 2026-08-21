@@ -1,13 +1,14 @@
 {
   "name": "tickerdock-workspace",
   "private": true,
-  "version": "0.1.5",
+  "version": "0.1.6",
   "packageManager": "pnpm@11.6.0",
   "scripts": {
     "clean": "pnpm --recursive run clean",
+    "bump-version": "node scripts/bump-version.mjs",
     "build": "pnpm --filter @tickerdock/domain build && pnpm --filter @tickerdock/data-sources build && pnpm --filter tickerdock build",
     "typecheck": "pnpm --filter @tickerdock/webview-ui typecheck && tsc -b --pretty false",
-    "test": "pnpm -r test",
+    "test": "node --test scripts/bump-version.test.mjs && pnpm -r test",
     "lint": "eslint \"packages/**/*.{ts,tsx}\"",
     "coverage": "pnpm -r --if-present coverage",
     "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build",
